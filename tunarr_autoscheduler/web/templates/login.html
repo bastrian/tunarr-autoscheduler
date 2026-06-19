@@ -13,6 +13,9 @@
   <div class="card">
     <div class="card-body">
       {% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+      {% if request.query_params.get("credentials_changed") == "1" %}
+      <div class="alert alert-success">Admin login updated. Please sign in again.</div>
+      {% endif %}
       <form method="post" action="/login">
         <label class="form-label" for="username">Username</label>
         <input class="form-control mb-3" id="username" name="username" value="{{ username or 'admin' }}" required>

@@ -50,6 +50,46 @@
     </div>
   </div>
   <div class="card mb-3">
+    <div class="card-header">Admin Login</div>
+    <div class="card-body">
+      <form method="post" action="/settings" class="row g-3 align-items-end">
+        <input type="hidden" name="timezone" value="{{ config.timezone }}">
+        <input type="hidden" name="auth_submitted" value="1">
+        <div class="col-md-3">
+          <label class="form-label" for="auth_username">Username</label>
+          <input class="form-control" id="auth_username" name="auth_username"
+                 value="{{ config.auth.username }}" autocomplete="username" required>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" for="auth_current_password">Current Password</label>
+          <input class="form-control" id="auth_current_password"
+                 name="auth_current_password" type="password"
+                 autocomplete="current-password" required>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" for="auth_new_password">New Password</label>
+          <input class="form-control" id="auth_new_password"
+                 name="auth_new_password" type="password" minlength="8"
+                 autocomplete="new-password" required>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" for="auth_confirm_password">Confirm Password</label>
+          <input class="form-control" id="auth_confirm_password"
+                 name="auth_confirm_password" type="password" minlength="8"
+                 autocomplete="new-password" required>
+        </div>
+        <div class="col-md-auto">
+          <button class="btn btn-gold" type="submit">Update Login</button>
+        </div>
+        <div class="col-12">
+          <div class="form-text">
+            Updating the admin login signs out the current browser session.
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+  <div class="card mb-3">
     <div class="card-header">Automated Backups</div>
     <div class="card-body">
       <form method="post" action="/settings" class="row g-3 align-items-end">

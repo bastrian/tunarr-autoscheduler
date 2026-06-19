@@ -7,6 +7,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from pydantic import ValidationError
 
+from tunarr_autoscheduler.core.auth import hash_password, verify_password
 from tunarr_autoscheduler.integrations.metadata.audit import build_metadata_audit
 from tunarr_autoscheduler.integrations.metadata.clients import JellystatClient
 from tunarr_autoscheduler.integrations.metadata.service import (
@@ -117,6 +118,24 @@ async def save_settings(request: Request) -> Response:
             "public",
         } else "public"
         data["public_access"] = public_access
+    if "auth_submitted" in form:
+        auth_error = _auth_update_error(form, current_config)
+        if auth_error:
+            template = request.app.state.templates.get_template("settings.html")
+            return HTMLResponse(
+                template.render(
+                    **await _settings_context(
+                        request,
+                        current_config,
+                        error=auth_error,
+                    ),
+                ),
+                status_code=400,
+            )
+        auth = dict(data.get("auth") or {})
+        auth["username"] = str(form.get("auth_username", "")).strip()
+        auth["password_hash"] = hash_password(str(form.get("auth_new_password", "")))
+        data["auth"] = auth
     if "notifications_submitted" in form:
         notifications = dict(data.get("notifications") or {})
         notifications["enabled"] = form.get("notifications_enabled") == "on"
@@ -183,6 +202,10 @@ async def save_settings(request: Request) -> Response:
             status_code=400,
         )
     core.config_manager.save(config)
+    if "auth_submitted" in form:
+        response = RedirectResponse("/login?credentials_changed=1", status_code=303)
+        response.delete_cookie("tunarr_session")
+        return response
     return RedirectResponse("/settings?saved=1", status_code=303)
 
 
@@ -399,6 +422,24 @@ def _metadata_from_form(form: Any, current_metadata: Any) -> dict[str, Any]:
         metadata.get("cache_ttl_days", 14),
     )
     return metadata
+
+
+def _auth_update_error(form: Any, config: AppConfig) -> str:
+    username = str(form.get("auth_username", "")).strip()
+    current_password = str(form.get("auth_current_password", ""))
+    new_password = str(form.get("auth_new_password", ""))
+    confirm_password = str(form.get("auth_confirm_password", ""))
+    if not username:
+        return "Admin username is required."
+    if not current_password:
+        return "Current password is required."
+    if not verify_password(current_password, config.auth.password_hash):
+        return "Current password is incorrect."
+    if len(new_password) < 8:
+        return "New password must be at least 8 characters long."
+    if new_password != confirm_password:
+        return "New password confirmation does not match."
+    return ""
 
 
 def _int_form(value: object, default: object) -> int:
