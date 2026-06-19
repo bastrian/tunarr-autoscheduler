@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Schedule Preview - {{ channel.name }}</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="/static/app.css" rel="stylesheet">
+</head>
+<body>
+{% set active_page = "dashboard" %}
+{% include "_nav.html" %}
+<main class="container pb-4">
+  <div class="page-header">
+    <div>
+      <h1>Schedule Preview - {{ channel.name }}</h1>
+      <p class="text-secondary mb-0">
+        Version {{ version }} / {{ rows|length }} blocks / Total {{ timeline.total_duration() }}
+      </p>
+    </div>
+    <div class="action-bar">
+      <a href="/schedules/{{ channel.id }}" class="btn btn-outline-light">Back to Versions</a>
+      <a href="/channels/{{ channel.id }}" class="btn btn-outline-secondary">Back to Channel</a>
+    </div>
+  </div>
+
+  {% if validation_errors %}
+  <div class="alert alert-danger">
+    <strong>Validation errors</strong>
+    <ul class="mb-0 mt-2">
+      {% for error in validation_errors %}
+      <li>{{ error }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  {% if ad_warnings %}
+  <div class="alert alert-warning">
+    <strong>Ad planning warnings</strong>
+    <ul class="mb-0 mt-2">
+      {% for warning in ad_warnings %}
+      <li>{{ warning }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  {% if summary.ad_target_minutes and summary.ad_inserted_minutes < summary.ad_target_minutes %}
+  <div class="alert alert-warning ad-target-alert">
+    <strong>Ad target below plan</strong>
+    Inserted {{ summary.ad_inserted_minutes }}m of {{ summary.ad_target_minutes }}m target.
+  </div>
+  {% endif %}
+
+  <section class="preview-summary mb-3" aria-label="Schedule summary">
+    <div class="preview-stat">
+      <span>Total</span>
+      <strong>{{ summary.total_blocks }}</strong>
+      <small>{{ summary.total_minutes }}m</small>
+    </div>
+    <div class="preview-stat">
+      <span>Episodes</span>
+      <strong>{{ summary.episode_count }}</strong>
+      <small>{{ summary.type_minutes.get("episode", 0) }}m</small>
+    </div>
+    <div class="preview-stat">
+      <span>Movies</span>
+      <strong>{{ summary.movie_count }}</strong>
+      <small>{{ summary.type_minutes.get("movie", 0) }}m</small>
+    </div>
+    <div class="preview-stat">
+      <span>Ads</span>
+      <strong>{{ summary.ad_count }}</strong>
+      <small>
+        {{ summary.ad_minutes }}m
+        {% if summary.ad_target_minutes %}
+        / target {{ summary.ad_target_minutes }}m
+        {% endif %}
+      </small>
+    </div>
+    {% if summary.ad_rotation %}
+    <div class="preview-stat">
+      <span>Ad Rotation</span>
+      <strong>{{ summary.ad_rotation.get("unique_spots_used", 0) }}/{{ summary.ad_rotation.get("spot_count", 0) }}</strong>
+      <small>
+        {{ summary.ad_rotation.get("break_count", 0) }} breaks
+        {% if summary.ad_rotation.get("poor_fit_count", 0) %}
+        / {{ summary.ad_rotation.get("poor_fit_count", 0) }} fit warnings
+        {% endif %}
+        {% if summary.ad_rotation.get("generic_break_count", 0) %}
+        / {{ summary.ad_rotation.get("generic_break_count", 0) }} generic
+        {% endif %}
+      </small>
+    </div>
+    {% endif %}
+    <div class="preview-stat">
+      <span>Offline</span>
+      <strong>{{ summary.offline_count }}</strong>
+      <small>{{ summary.type_minutes.get("offline", 0) }}m</small>
+    </div>
+  </section>
+
+  <div class="preview-toolbar mb-3">
+    <span class="section-label">Timezone</span>
+    <span>{{ timezone }}</span>
+    <label class="section-label" for="preview-type-filter">Type</label>
+    <select id="preview-type-filter" class="form-select form-select-sm preview-filter">
+      <option value="">All</option>
+      {% for type_name in summary.types %}
+      <option value="{{ type_name }}">{{ type_name }}</option>
+      {% endfor %}
+    </select>
+    <label class="section-label" for="preview-daypart-filter">Daypart</label>
+    <select id="preview-daypart-filter" class="form-select form-select-sm preview-filter">
+      <option value="">All</option>
+      {% for daypart in summary.dayparts %}
+      <option value="{{ daypart }}">{{ daypart }}</option>
+      {% endfor %}
+    </select>
+    <label class="section-label" for="preview-day-filter">Day</label>
+    <select id="preview-day-filter" class="form-select form-select-sm preview-filter">
+      <option value="">All</option>
+      {% for day in summary.days %}
+      <option value="{{ day.date }}">{{ day.label }}</option>
+      {% endfor %}
+    </select>
+    <label class="section-label" for="preview-hour-filter">Hour</label>
+    <select id="preview-hour-filter" class="form-select form-select-sm preview-filter">
+      <option value="">All</option>
+      {% for hour in summary.hours %}
+      <option value="{{ hour }}">{{ hour }}</option>
+      {% endfor %}
+    </select>
+    <label class="section-label" for="preview-status-filter">Status</label>
+    <select id="preview-status-filter" class="form-select form-select-sm preview-filter">
+      <option value="">All</option>
+      {% for status in summary.statuses %}
+      <option value="{{ status }}">{{ status }}</option>
+      {% endfor %}
+    </select>
+    <label class="section-label" for="preview-group-mode">Group</label>
+    <select id="preview-group-mode" class="form-select form-select-sm preview-filter">
+      <option value="">None</option>
+      <option value="day">Day</option>
+      <option value="daypart">Daypart</option>
+    </select>
+    <button type="button" id="preview-reset-filters" class="btn btn-sm btn-outline-light">Reset</button>
+    <span id="preview-visible-count" class="ms-auto text-secondary small">{{ rows|length }} visible</span>
+  </div>
+
+  <div class="table-responsive preview-table">
+    <table class="table table-hover align-middle">
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Type</th>
+          <th>Title</th>
+          <th>Duration</th>
+          <th>Daypart</th>
+          <th>Details</th>
+          <th>Source</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr class="preview-row preview-row-{{ row.type }}"
+            data-preview-type="{{ row.type }}"
+            data-preview-status="{{ row.status }}"
+            data-preview-hour="{{ row.hour }}"
+            data-preview-day="{{ row.day }}"
+            data-preview-daypart="{{ row.daypart }}"
+            data-preview-date="{{ row.date }}">
+          <td class="text-nowrap">{{ row.time }}</td>
+          <td><span class="type-badge preview-type-{{ row.type }}">{{ row.type }}</span></td>
+          <td>
+            {{ row.title }}
+            {% if row.status != "ok" %}
+            <span class="badge preview-status-badge preview-status-{{ row.status }}">{{ row.status }}</span>
+            {% endif %}
+          </td>
+          <td>{{ row.duration }}m</td>
+          <td>{{ row.daypart }}</td>
+          <td>{{ row.details }}</td>
+          <td class="small text-secondary">{{ row.source }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+(() => {
+  const typeFilter = document.getElementById("preview-type-filter");
+  const daypartFilter = document.getElementById("preview-daypart-filter");
+  const dayFilter = document.getElementById("preview-day-filter");
+  const hourFilter = document.getElementById("preview-hour-filter");
+  const statusFilter = document.getElementById("preview-status-filter");
+  const groupMode = document.getElementById("preview-group-mode");
+  const reset = document.getElementById("preview-reset-filters");
+  const counter = document.getElementById("preview-visible-count");
+  const rows = Array.from(document.querySelectorAll(".preview-row"));
+  const tbody = document.querySelector(".preview-table tbody");
+
+  function removeGroupRows() {
+    tbody.querySelectorAll(".preview-group-row").forEach((row) => row.remove());
+  }
+
+  function groupLabel(row) {
+    if (groupMode.value === "day") return row.dataset.previewDay;
+    if (groupMode.value === "daypart") return row.dataset.previewDaypart || "none";
+    return "";
+  }
+
+  function insertGroupRows() {
+    removeGroupRows();
+    if (!groupMode.value) return;
+    let lastGroup = "";
+    for (const row of rows) {
+      if (row.hidden) continue;
+      const label = groupLabel(row);
+      if (label === lastGroup) continue;
+      lastGroup = label;
+      const groupRow = document.createElement("tr");
+      groupRow.className = "preview-group-row";
+      groupRow.innerHTML = `<td colspan="7">${label}</td>`;
+      row.before(groupRow);
+    }
+  }
+
+  function applyFilters() {
+    let visible = 0;
+    for (const row of rows) {
+      const typeMatch = !typeFilter.value || row.dataset.previewType === typeFilter.value;
+      const daypartMatch = !daypartFilter.value || row.dataset.previewDaypart === daypartFilter.value;
+      const dayMatch = !dayFilter.value || row.dataset.previewDate === dayFilter.value;
+      const hourMatch = !hourFilter.value || row.dataset.previewHour === hourFilter.value;
+      const statusMatch = !statusFilter.value || row.dataset.previewStatus === statusFilter.value;
+      const show = typeMatch && daypartMatch && dayMatch && hourMatch && statusMatch;
+      row.hidden = !show;
+      if (show) visible += 1;
+    }
+    counter.textContent = `${visible} visible`;
+    insertGroupRows();
+  }
+
+  for (const control of [typeFilter, daypartFilter, dayFilter, hourFilter, statusFilter, groupMode]) {
+    control.addEventListener("change", applyFilters);
+  }
+  reset.addEventListener("click", () => {
+    typeFilter.value = "";
+    daypartFilter.value = "";
+    dayFilter.value = "";
+    hourFilter.value = "";
+    statusFilter.value = "";
+    groupMode.value = "";
+    applyFilters();
+  });
+})();
+</script>
+</body>
+</html>

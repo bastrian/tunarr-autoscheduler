@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Playlist Categories - Tunarr AutoScheduler</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="/static/app.css" rel="stylesheet">
+</head>
+<body>
+{% set active_page = "playlists" %}
+{% include "_nav.html" %}
+<main class="container">
+  <div class="page-header">
+    <div>
+      <h1 class="mb-1">Playlist Categories</h1>
+      <div class="text-secondary">Group scheduler playlists by channel family, genre, or workflow.</div>
+    </div>
+    <a class="btn btn-outline-secondary" href="/playlists">Back to Playlists</a>
+  </div>
+  {% if saved %}<div class="alert alert-success">Category saved.</div>{% endif %}
+  {% if deleted %}<div class="alert alert-success">Category deleted. Existing playlists were moved to no category.</div>{% endif %}
+  {% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+
+  <div class="card mb-3">
+    <div class="card-header">New Category</div>
+    <div class="card-body">
+      <form method="post" action="/playlist-categories" class="row g-3 align-items-end">
+        <div class="col-md-4">
+          <label class="form-label" for="category-name">Name</label>
+          <input class="form-control" id="category-name" name="name" required>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="category-description">Description</label>
+          <input class="form-control" id="category-description" name="description">
+        </div>
+        <div class="col-md-2 d-grid">
+          <button class="btn btn-gold" type="submit">Create</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-hover align-middle">
+      <thead><tr><th>Name</th><th>Description</th><th>Playlists</th><th class="text-end">Actions</th></tr></thead>
+      <tbody>
+      {% for category in categories %}
+        {% set count = playlists|selectattr("category_id", "equalto", category.id)|list|length %}
+        <tr>
+          <td>
+            <form id="category-form-{{ category.id }}" method="post" action="/playlist-categories/{{ category.id }}">
+              <input class="form-control" name="name" required value="{{ category.name }}">
+            </form>
+          </td>
+          <td>
+            <input class="form-control" name="description" form="category-form-{{ category.id }}" value="{{ category.description }}">
+          </td>
+          <td>{{ count }}</td>
+          <td class="text-end">
+            <button class="btn btn-sm btn-outline-light" type="submit" form="category-form-{{ category.id }}">Save</button>
+            <form class="d-inline" method="post" action="/playlist-categories/{{ category.id }}/delete">
+              <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
+            </form>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="4" class="text-secondary">No categories created yet.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</main>
+</body>
+</html>

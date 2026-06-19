@@ -1,0 +1,1154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Edit Channel - Tunarr AutoScheduler</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="/static/app.css" rel="stylesheet">
+</head>
+<body>
+{% set active_page = "dashboard" %}
+{% include "_nav.html" %}
+<main class="container pb-4">
+  <div class="page-header"><h1>Edit Channel - {{ channel.name or channel.id }}</h1></div>
+  {% if saved %}<div class="alert alert-success">Channel saved.</div>{% endif %}
+  {% if request.query_params.get("assigned_playlist") == "1" %}
+  <div class="alert alert-success">Recommendation playlist assigned to the daypart.</div>
+  {% endif %}
+  {% if imported %}<div class="alert alert-success">Channel config imported.</div>{% endif %}
+  {% if import_error == "empty" %}<div class="alert alert-warning">Paste a channel config JSON before importing.</div>{% endif %}
+  {% if import_error == "invalid" %}<div class="alert alert-danger">Channel config import failed. Check that the JSON is valid.</div>{% endif %}
+  {% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+
+  <form method="post" action="/channels/{{ channel.id }}/config" data-channel-config-form>
+    <input type="hidden" name="return_to" value="{{ return_to }}">
+    <input type="hidden" name="daypart_indices" id="daypart-indices"
+           value="{% for dp in daypart_rows %}{{ loop.index0 }}{% if not loop.last %},{% endif %}{% endfor %}">
+
+    <div class="action-bar sticky-actions mb-3">
+      <button class="btn btn-gold" type="submit">Save Channel</button>
+      <a class="btn btn-outline-secondary" href="{{ return_to }}">Cancel</a>
+      <a class="btn btn-outline-info" href="/channels/{{ channel.id }}/config/export">Export JSON</a>
+    </div>
+
+    <ul class="nav nav-tabs mb-3" role="tablist">
+      <li class="nav-item" role="presentation">
+        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#general" type="button">General</button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#dayparts" type="button">Dayparts</button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#ads" type="button"
+                data-profile-scope="advanced general_tv movie_channel series_marathon">Ads</button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#continuity" type="button"
+                data-profile-scope="advanced general_tv">Continuity</button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#advanced" type="button"
+                data-profile-scope="advanced">Advanced</button>
+      </li>
+    </ul>
+
+    <div class="tab-content">
+      <div class="tab-pane fade show active" id="general">
+        <div class="card mb-3">
+          <div class="card-header">General</div>
+          <div class="card-body">
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label" for="name">Name</label>
+                <input class="form-control" id="name" name="name" value="{{ channel.name }}">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label" for="channel_profile">Channel Profile</label>
+                <select class="form-select" id="channel_profile" name="channel_profile">
+                  {% for profile in channel_profiles %}
+                  <option value="{{ profile.value }}" data-description="{{ profile.description }}"
+                          {% if profile.value == channel.channel_profile %}selected{% endif %}>
+                    {{ profile.label }}
+                  </option>
+                  {% endfor %}
+                </select>
+                <div class="form-text" id="channel-profile-description"></div>
+                <div class="action-bar mt-2" data-profile-scope="movie_channel">
+                  <a class="btn btn-sm btn-outline-info"
+                     href="/recommendations?channel_id={{ channel.id }}&profile=movie-channel-pool&media_type=movie">
+                    Movie Pool Recommendations
+                  </a>
+                  <a class="btn btn-sm btn-gold"
+                     href="/recommendations/builder?preview=1&mode=channel&channel_id={{ channel.id }}&channel_name={{ channel.name|urlencode }}&profile=movie-channel-pool&themes=Movies%2CPrime-Time%20Movies&per_theme_limit=30&balance_mode=movie_friendly&max_movies_per_theme=30&min_series_per_theme=1">
+                    Build Movie Channel
+                  </a>
+                  <a class="btn btn-sm btn-outline-secondary"
+                     href="/recommendations?channel_id={{ channel.id }}&profile=prime-time-movies&media_type=movie">
+                    Prime-Time Movies
+                  </a>
+                </div>
+                <div class="action-bar mt-2" data-profile-scope="series_marathon">
+                  <a class="btn btn-sm btn-outline-info"
+                     href="/recommendations?channel_id={{ channel.id }}&profile=series-marathon&media_type=series">
+                    Marathon Series Recommendations
+                  </a>
+                  <a class="btn btn-sm btn-gold"
+                     href="/recommendations/builder?preview=1&mode=channel&channel_id={{ channel.id }}&channel_name={{ channel.name|urlencode }}&profile=series-marathon&themes=Series%20Marathon&per_theme_limit=40&balance_mode=series_only&max_movies_per_theme=0&min_series_per_theme=8">
+                    Build Series Marathon
+                  </a>
+                </div>
+              </div>
+              <div class="col-md-3">
+                <label class="form-label" for="scheduling_enabled">Scheduling</label>
+                <select class="form-select" id="scheduling_enabled" name="scheduling_enabled">
+                  <option value="true" {% if channel.scheduling_enabled %}selected{% endif %}>Enabled</option>
+                  <option value="false" {% if not channel.scheduling_enabled %}selected{% endif %}>Disabled</option>
+                </select>
+              </div>
+              <div class="col-md-3">
+                <label class="form-label" for="schedule_horizon_days">Horizon Days</label>
+                <input class="form-control" id="schedule_horizon_days" name="schedule_horizon_days"
+                       type="number" min="1" max="14" value="{{ channel.schedule_horizon_days }}">
+              </div>
+              <div class="col-md-3">
+                <label class="form-label" for="public_epg_enabled">Public EPG</label>
+                <input type="hidden" name="public_epg_submitted" value="1">
+                <div class="form-check form-switch form-switch-card">
+                  <input class="form-check-input" id="public_epg_enabled" name="public_epg_enabled"
+                         type="checkbox" {% if channel.public_epg_enabled %}checked{% endif %}>
+                  <label class="form-check-label" for="public_epg_enabled">Show on public guide</label>
+                </div>
+                <div class="form-text">Controls whether this channel appears on the public EPG surface.</div>
+              </div>
+              <div class="col-md-3">
+                <label class="form-label" for="public_epg_order">EPG Order</label>
+                <input class="form-control" id="public_epg_order" name="public_epg_order"
+                       type="number" min="0" value="{{ channel.public_epg_order }}">
+                <div class="form-text">Lower numbers appear first on the public guide.</div>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label" for="public_epg_logo_url">EPG Logo URL</label>
+                <input class="form-control" id="public_epg_logo_url" name="public_epg_logo_url"
+                       value="{{ channel.public_epg_logo_url }}" placeholder="https://...">
+                <div class="form-text">Optional logo shown in the public guide header for this channel.</div>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label" for="standby_custom_show_id">Unscheduled Time / Standby</label>
+                <select class="form-select" id="standby_custom_show_id" name="standby_custom_show_id">
+                  <option value="">Flex / no standby source</option>
+                  {% for option in custom_show_options %}
+                  <option value="{{ option.id }}" {% if option.id == channel.standby_custom_show_id %}selected{% endif %}>{{ option.name }}</option>
+                  {% endfor %}
+                </select>
+                <div class="form-text">Loops this Tunarr custom show whenever no daypart covers the time.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="card mb-3">
+          <div class="card-header">Automatic Follow-Up</div>
+          <div class="card-body">
+            <div class="row g-3 align-items-end">
+              <div class="col-md-3">
+                <input type="hidden" name="auto_follow_up_submitted" value="1">
+                <div class="form-check form-switch form-switch-card">
+                  <input class="form-check-input" id="auto_follow_up_enabled"
+                         name="auto_follow_up_enabled" type="checkbox"
+                         {% if channel.automatic_follow_up.enabled %}checked{% endif %}>
+                  <label class="form-check-label" for="auto_follow_up_enabled">
+                    Generate follow-ups
+                  </label>
+                </div>
+              </div>
+              <div class="col-md-3">
+                <div class="form-check form-switch form-switch-card">
+                  <input class="form-check-input" id="auto_follow_up_auto_approve"
+                         name="auto_follow_up_auto_approve" type="checkbox"
+                         {% if channel.automatic_follow_up.auto_approve %}checked{% endif %}>
+                  <label class="form-check-label" for="auto_follow_up_auto_approve">
+                    Auto-approve healthy drafts
+                  </label>
+                </div>
+              </div>
+              <div class="col-md-3">
+                <div class="form-check form-switch form-switch-card">
+                  <input class="form-check-input" id="auto_follow_up_auto_upload"
+                         name="auto_follow_up_auto_upload" type="checkbox"
+                         {% if channel.automatic_follow_up.auto_upload %}checked{% endif %}>
+                  <label class="form-check-label" for="auto_follow_up_auto_upload">
+                    Auto-upload after approval
+                  </label>
+                </div>
+              </div>
+              <div class="col-md-3">
+                <label class="form-label" for="auto_follow_up_warning_hours">Generate when ending within</label>
+                <div class="input-group">
+                  <input class="form-control" id="auto_follow_up_warning_hours"
+                         name="auto_follow_up_warning_hours" type="number" min="1" max="168"
+                         value="{{ channel.automatic_follow_up.warning_hours }}">
+                  <span class="input-group-text">hours</span>
+                </div>
+              </div>
+            </div>
+            <div class="form-text mt-2">
+              Automatic upload is blocked when a newer draft is pending or schedule health is critical.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-pane fade" id="dayparts">
+        <div class="d-flex justify-content-between align-items-center gap-2 mb-3">
+          <div class="text-secondary">Configure as many schedule windows as this channel needs.</div>
+          <button class="btn btn-sm btn-gold" id="add-daypart" type="button">Add Daypart</button>
+        </div>
+        <div id="daypart-warnings" class="alert alert-warning daypart-warning-panel {% if not daypart_warnings %}d-none{% endif %}">
+          <strong>Daypart checks</strong>
+          <ul class="mb-0">
+            {% for warning in daypart_warnings %}
+            <li>{{ warning }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+        <div id="daypart-list">
+        {% for dp in daypart_rows %}
+        {% set index = loop.index0 %}
+        <div class="card daypart-card mb-3" data-daypart-index="{{ index }}">
+          <div class="card-header">
+            <button class="btn btn-sm btn-outline-light toggle-daypart-body" type="button"
+                    data-bs-toggle="collapse" data-bs-target="#daypart-body-{{ index }}"
+                    aria-expanded="true" aria-controls="daypart-body-{{ index }}">
+              Collapse
+            </button>
+            <div class="daypart-heading">
+              <span class="daypart-title">{{ dp.name }}</span>
+              <span class="daypart-summary" data-daypart-summary></span>
+            </div>
+            <div class="daypart-card-tools">
+              <select class="form-select form-select-sm copy-daypart-select" aria-label="Copy settings from another daypart"></select>
+              <button class="btn btn-sm btn-outline-secondary copy-daypart-sources" type="button">Copy Sources</button>
+              <button class="btn btn-sm btn-outline-secondary copy-daypart-days" type="button">Copy Days</button>
+              <button class="btn btn-sm btn-outline-secondary move-daypart-up" type="button">Up</button>
+              <button class="btn btn-sm btn-outline-secondary move-daypart-down" type="button">Down</button>
+              <button class="btn btn-sm btn-outline-info duplicate-daypart" type="button">Duplicate</button>
+              <a class="btn btn-sm btn-outline-info"
+                 href="/recommendations?channel_id={{ channel.id }}&daypart={{ dp.name|urlencode }}&assign_to_daypart=1">
+                Recommendations
+              </a>
+              <button class="btn btn-sm btn-outline-danger remove-daypart" type="button">Remove</button>
+            </div>
+          </div>
+          <div class="collapse show daypart-card-body" id="daypart-body-{{ index }}">
+          <div class="card-body">
+            {% set card_warnings = daypart_content_warnings.get(dp.name, []) %}
+            {% set card_fixes = daypart_fix_suggestions.get(dp.name, []) %}
+            {% if card_warnings %}
+            <div class="alert alert-warning py-2 mb-3">
+              <strong>Recommendation source check</strong>
+              <ul class="mb-0">
+                {% for warning in card_warnings %}
+                <li>{{ warning }}</li>
+                {% endfor %}
+              </ul>
+            </div>
+            {% endif %}
+            {% if card_fixes %}
+            <div class="filter-panel mb-3">
+              <div class="small text-secondary mb-2">Fix suggestions for underfilled daypart</div>
+              <div class="d-flex flex-wrap gap-2">
+                {% for fix in card_fixes %}
+                <a class="btn btn-sm {% if loop.first %}btn-gold{% else %}btn-outline-info{% endif %}"
+                   href="{{ fix.href }}"
+                   title="{{ fix.message }}">
+                  {{ fix.action }}
+                </a>
+                {% if fix.direct %}
+                <form method="post" action="/recommendations/daypart-fix" class="d-inline">
+                  <input type="hidden" name="channel_id" value="{{ channel.id }}">
+                  <input type="hidden" name="daypart" value="{{ dp.name }}">
+                  <input type="hidden" name="profile" value="{{ fix.profile }}">
+                  <input type="hidden" name="media_type" value="{{ fix.media_type }}">
+                  <input type="hidden" name="limit" value="{{ fix.limit }}">
+                  <input type="hidden" name="min_score" value="1">
+                  <input type="hidden" name="assign_to_daypart" value="1">
+                  <button class="btn btn-sm btn-outline-light" type="submit" title="{{ fix.message }}">
+                    Fix Now
+                  </button>
+                </form>
+                {% endif %}
+                {% endfor %}
+              </div>
+            </div>
+            {% endif %}
+            <div class="row g-3">
+              <div class="col-md-3">
+                <label class="form-label">Name</label>
+                <input class="form-control" name="daypart_name_{{ index }}" value="{{ dp.name }}">
+              </div>
+              <div class="col-md-2">
+                <label class="form-label">Start</label>
+                <input class="form-control" name="daypart_start_{{ index }}" type="time" value="{{ dp.start_time }}">
+              </div>
+              <div class="col-md-2">
+                <label class="form-label">End</label>
+                <input class="form-control" name="daypart_end_{{ index }}" type="time" value="{{ dp.end_time }}">
+              </div>
+              <div class="col-md-3" data-profile-scope="advanced general_tv movie_channel series_marathon">
+                <label class="form-label">
+                  Content
+                  <button class="help-dot" type="button" data-bs-toggle="tooltip"
+                          data-bs-title="Series schedules episodes, Movies schedules only movie blocks from playlists, custom shows, or the Jellyfin movie library fallback. Mixed leaves both schedulers available.">?</button>
+                </label>
+                <select class="form-select" name="daypart_content_mode_{{ index }}">
+                  <option value="series" {% if dp.content_mode == "series" %}selected{% endif %}>Series / Episodes</option>
+                  <option value="movies" {% if dp.content_mode == "movies" %}selected{% endif %}>Movies Only</option>
+                  <option value="mixed" {% if dp.content_mode == "mixed" %}selected{% endif %}>Mixed</option>
+                </select>
+              </div>
+              <div class="col-md-3" data-profile-scope="advanced general_tv series_marathon">
+                <label class="form-label">
+                  Rotation
+                  <button class="help-dot" type="button" data-bs-toggle="tooltip"
+                          data-bs-title="Rotation chooses the named scheduling source for this daypart. Playlists and Tunarr custom shows can narrow or override the library fallback.">?</button>
+                </label>
+                <select class="form-select" name="daypart_rotation_{{ index }}">
+                  {% if not channel.rotations %}
+                  <option value="{{ dp.rotation }}" selected>{{ dp.rotation }}</option>
+                  {% endif %}
+                  {% for rotation in channel.rotations %}
+                  <option value="{{ rotation.name }}" {% if rotation.name == dp.rotation %}selected{% endif %}>{{ rotation.name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">Scheduler Playlists</label>
+                <input class="form-control form-control-sm mb-2 playlist-option-filter"
+                       type="search"
+                       placeholder="Filter playlists"
+                       aria-label="Filter scheduler playlists">
+                <div class="option-list">
+                  {% for option in playlist_options %}
+                  <div class="form-check playlist-option"
+                       data-name="{{ option.name|lower }}"
+                       data-category="{{ option.category|lower }}"
+                       data-tags="{{ option.tags|lower }}"
+                       data-scope="{{ option.scope_label|lower }}">
+                    <input class="form-check-input" type="checkbox"
+                           name="daypart_playlist_ids_{{ index }}" value="{{ option.id }}"
+                           id="daypart_playlist_{{ index }}_{{ loop.index0 }}"
+                           {% if option.id in dp.playlist_ids %}checked{% endif %}>
+                    <label class="form-check-label" for="daypart_playlist_{{ index }}_{{ loop.index0 }}">
+                      {{ option.name }}
+                      <span class="option-meta">{{ option.category }} / {{ option.scope_label }}{% if option.tags %} / {{ option.tags }}{% endif %}</span>
+                    </label>
+                  </div>
+                  {% endfor %}
+                  {% for selected_id in dp.playlist_ids %}
+                  {% if selected_id not in playlist_options|map(attribute='id')|list %}
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox"
+                           name="daypart_playlist_ids_{{ index }}" value="{{ selected_id }}"
+                           id="daypart_playlist_missing_{{ index }}_{{ loop.index0 }}" checked>
+                    <label class="form-check-label" for="daypart_playlist_missing_{{ index }}_{{ loop.index0 }}">{{ selected_id }} (missing)</label>
+                  </div>
+                  {% endif %}
+                  {% endfor %}
+                  {% if not playlist_options and not dp.playlist_ids %}
+                  <div class="small text-secondary">No scheduler playlists available.</div>
+                  {% endif %}
+                </div>
+                <div class="form-text text-secondary">Primary source for series and movies.</div>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">Tunarr Custom Shows</label>
+                <div class="option-list">
+                  {% for option in custom_show_options %}
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox"
+                           name="daypart_custom_show_list_ids_{{ index }}" value="{{ option.id }}"
+                           id="daypart_custom_show_{{ index }}_{{ loop.index0 }}"
+                           {% if option.id in dp.custom_show_list_ids %}checked{% endif %}>
+                    <label class="form-check-label" for="daypart_custom_show_{{ index }}_{{ loop.index0 }}">{{ option.name }}</label>
+                  </div>
+                  {% endfor %}
+                  {% for selected_id in dp.custom_show_list_ids %}
+                  {% if selected_id not in custom_show_options|map(attribute='id')|list %}
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox"
+                           name="daypart_custom_show_list_ids_{{ index }}" value="{{ selected_id }}"
+                           id="daypart_custom_missing_{{ index }}_{{ loop.index0 }}" checked>
+                    <label class="form-check-label" for="daypart_custom_missing_{{ index }}_{{ loop.index0 }}">{{ selected_id }} (missing)</label>
+                  </div>
+                  {% endif %}
+                  {% endfor %}
+                  {% if not custom_show_options and not dp.custom_show_list_ids %}
+                  <div class="small text-secondary">No Tunarr custom shows available.</div>
+                  {% endif %}
+                </div>
+              </div>
+              <div class="col-md-2" data-profile-scope="advanced general_tv movie_channel series_marathon">
+                <label class="form-label">Slot Min</label>
+                <input class="form-control" name="daypart_slot_duration_{{ index }}" type="number" min="1" value="{{ dp.slot_duration_minutes }}">
+              </div>
+              <div class="col-12">
+                <div class="d-flex flex-wrap gap-3">
+                  {% for value, label in day_options %}
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="daypart_days_{{ index }}"
+                           value="{{ value }}" id="daypart_{{ index }}_{{ value }}"
+                           {% if value in dp.days %}checked{% endif %}>
+                    <label class="form-check-label" for="daypart_{{ index }}_{{ value }}">{{ label }}</label>
+                  </div>
+                  {% endfor %}
+                </div>
+              </div>
+              <div class="col-md-2" data-profile-scope="advanced general_tv movie_channel">
+                <div class="form-check mt-4">
+                  <input class="form-check-input" type="checkbox" name="daypart_allow_movies_{{ index }}"
+                         id="daypart_allow_movies_{{ index }}" {% if dp.allow_movies %}checked{% endif %}>
+                  <label class="form-check-label" for="daypart_allow_movies_{{ index }}">Movies</label>
+                </div>
+              </div>
+              <div class="col-md-2" data-profile-scope="advanced general_tv movie_channel">
+                <div class="form-check mt-4">
+                  <input class="form-check-input" type="checkbox" name="daypart_variable_movie_duration_{{ index }}"
+                         id="daypart_variable_movie_duration_{{ index }}" {% if dp.variable_movie_duration %}checked{% endif %}>
+                  <label class="form-check-label" for="daypart_variable_movie_duration_{{ index }}">Variable Movie</label>
+                </div>
+              </div>
+              <div class="col-md-3" data-profile-scope="advanced general_tv movie_channel">
+                <label class="form-label">
+                  Movie Selection
+                  <button class="help-dot" type="button" data-bs-toggle="tooltip"
+                          data-bs-title="Best fit chooses the longest movie that fits the slot. Jellyfin random rotates through available movies in a stable shuffled order without repeating already scheduled movies.">?</button>
+                </label>
+                <select class="form-select" name="daypart_movie_selection_{{ index }}">
+                  <option value="best_fit" {% if dp.movie_selection == "best_fit" %}selected{% endif %}>Best fit</option>
+                  <option value="library_random" {% if dp.movie_selection == "library_random" %}selected{% endif %}>Jellyfin random</option>
+                </select>
+              </div>
+              <div class="col-md-2" data-profile-scope="advanced general_tv movie_channel series_marathon">
+                <div class="form-check mt-4">
+                  <input class="form-check-input" type="checkbox" name="daypart_off_air_{{ index }}"
+                         id="daypart_off_air_{{ index }}" {% if dp.off_air %}checked{% endif %}>
+                  <label class="form-check-label" for="daypart_off_air_{{ index }}">Off-Air Loop</label>
+                  <button class="help-dot" type="button" data-bs-toggle="tooltip"
+                          data-bs-title="Marks this daypart as standby/off-air. Select a Tunarr custom show so it can loop instead of scheduling normal programs.">?</button>
+                </div>
+              </div>
+              <div class="col-md-2" data-profile-scope="advanced general_tv movie_channel">
+                <label class="form-label">Movie Slots</label>
+                <input class="form-control" name="daypart_movie_slot_count_{{ index }}" type="number" min="0" value="{{ dp.movie_slot_count }}">
+              </div>
+              <div class="col-md-2" data-profile-scope="advanced general_tv movie_channel">
+                <label class="form-label">End Tolerance Min</label>
+                <input class="form-control" name="daypart_end_tolerance_minutes_{{ index }}" type="number" min="0" value="{{ dp.end_tolerance_minutes }}">
+              </div>
+              <div class="col-md-2" data-profile-scope="advanced general_tv movie_channel series_marathon">
+                <label class="form-label">
+                  Ad Density
+                  <button class="help-dot" type="button" data-bs-toggle="tooltip"
+                          data-bs-title="Per-daypart ad density controls how aggressively this window receives ads. Off-air windows are excluded.">?</button>
+                </label>
+                <input class="form-control" name="daypart_ad_density_{{ index }}" type="number" min="0" max="1" step="0.01" value="{{ dp.ad_density }}">
+              </div>
+              <div class="col-md-3" data-profile-scope="advanced general_tv">
+                <label class="form-label">
+                  Continuity Frequency
+                  <button class="help-dot" type="button" data-bs-toggle="tooltip"
+                          data-bs-title="Roughly how often station IDs or continuity clips may be inserted in this daypart. 0 disables continuity for this window.">?</button>
+                </label>
+                <input class="form-control" name="daypart_continuity_frequency_{{ index }}" type="number" min="0" value="{{ dp.continuity_frequency }}">
+              </div>
+            </div>
+          </div>
+          </div>
+        </div>
+        {% endfor %}
+        </div>
+      </div>
+
+      <div class="tab-pane fade" id="ads" data-profile-scope="advanced general_tv movie_channel series_marathon">
+        <div class="preview-summary mb-3">
+          <div class="preview-stat">
+            <span>Estimated Target</span>
+            <strong>{{ ad_plan.target_minutes }}m</strong>
+            <small>{{ ad_plan.horizon_days }} day horizon / {{ ad_plan.target_source }}</small>
+          </div>
+          <div class="preview-stat {% if ad_plan.max_total_reached %}stat-warning{% endif %}">
+            <span>Max Total</span>
+            <strong>{% if channel.ads.max_total_minutes %}{{ channel.ads.max_total_minutes }}m{% else %}Off{% endif %}</strong>
+            <small>{% if ad_plan.max_total_reached %}cap reached{% else %}not reached{% endif %}</small>
+          </div>
+          <div class="preview-stat">
+            <span>Eligible Content</span>
+            <strong>{{ ad_plan.eligible_minutes }}m</strong>
+            <small>Off-air time excluded</small>
+          </div>
+          <div class="preview-stat">
+            <span>Break Cadence</span>
+            <strong>{{ ad_plan.break_after_programs }}</strong>
+            <small>programs between breaks</small>
+          </div>
+          <div class="preview-stat">
+            <span>Break Length</span>
+            <strong>{{ ad_plan.break_range[0] }}-{{ ad_plan.break_range[1] }}m</strong>
+            <small>configured min and max</small>
+          </div>
+          <div class="preview-stat {% if ad_plan.filler_fit.get('spot_count', 0) == 0 and channel.ads.filler_list_id %}stat-warning{% endif %}">
+            <span>Filler Fit</span>
+            <strong>{{ ad_plan.filler_fit.get("spot_count", 0) }}</strong>
+            <small>
+              {% if ad_plan.filler_fit.get("spot_count", 0) %}
+              {{ (ad_plan.filler_fit.get("shortest_seconds", 0) / 60)|round(1) }}-{{ (ad_plan.filler_fit.get("longest_seconds", 0) / 60)|round(1) }}m spots
+              {% elif channel.ads.filler_list_id %}
+              no usable spots
+              {% else %}
+              no list selected
+              {% endif %}
+            </small>
+          </div>
+        </div>
+        {% if ad_plan.warnings %}
+        <div class="alert alert-warning">
+          <strong>Ad planning checks</strong>
+          <ul class="mb-0">
+            {% for warning in ad_plan.warnings %}
+            <li>{{ warning }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% endif %}
+        <div class="card mb-3">
+          <div class="card-header">Ads</div>
+          <div class="card-body">
+            <div class="row g-3">
+              <div class="col-md-2">
+                <div class="form-check mt-4">
+                  <input class="form-check-input" id="ads_enabled" name="ads_enabled" type="checkbox" {% if channel.ads.enabled %}checked{% endif %}>
+                  <label class="form-check-label" for="ads_enabled">Enabled</label>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label" for="ads_filler_list_id">Filler List ID</label>
+                <select class="form-select" id="ads_filler_list_id" name="ads_filler_list_id">
+                  <option value="">Library fallback / none</option>
+                  {% for option in filler_list_options %}
+                  <option value="{{ option.id }}" {% if option.id == channel.ads.filler_list_id %}selected{% endif %}>{{ option.name }}</option>
+                  {% endfor %}
+                  {% if channel.ads.filler_list_id and channel.ads.filler_list_id not in filler_list_options|map(attribute='id')|list %}
+                  <option value="{{ channel.ads.filler_list_id }}" selected>{{ channel.ads.filler_list_id }}</option>
+                  {% endif %}
+                </select>
+              </div>
+              <div class="col-md-2">
+                <label class="form-label" for="ads_break_after_programs">After Shows</label>
+                <input class="form-control" id="ads_break_after_programs" name="ads_break_after_programs" type="number" min="0" value="{{ channel.ads.break_after_programs }}">
+              </div>
+              <div class="col-md-2">
+                <label class="form-label" for="ads_min_total_minutes">Min Total Min</label>
+                <input class="form-control" id="ads_min_total_minutes" name="ads_min_total_minutes" type="number" min="0" value="{{ channel.ads.min_total_minutes }}">
+              </div>
+              <div class="col-md-2">
+                <label class="form-label" for="ads_max_total_minutes">
+                  Max Total Min
+                  <button class="help-dot" type="button" data-bs-toggle="tooltip"
+                          data-bs-title="Caps total ads across the generated schedule. 0 means no cap. The estimate shows when this cap is reached.">?</button>
+                </label>
+                <input class="form-control" id="ads_max_total_minutes" name="ads_max_total_minutes" type="number" min="0" value="{{ channel.ads.max_total_minutes }}">
+              </div>
+              <div class="col-md-2">
+                <label class="form-label" for="ads_ad_density">
+                  Density
+                  <button class="help-dot" type="button" data-bs-toggle="tooltip"
+                          data-bs-title="Approximate ad share of eligible content time. 0.08 means about 8 percent before min/max caps and filler-fit limits.">?</button>
+                </label>
+                <input class="form-control" id="ads_ad_density" name="ads_ad_density" type="number" min="0" max="1" step="0.01" value="{{ channel.ads.ad_density }}">
+              </div>
+              <div class="col-md-3">
+                <label class="form-label" for="ads_min_ad_break_duration_minutes">Min Break Min</label>
+                <input class="form-control" id="ads_min_ad_break_duration_minutes" name="ads_min_ad_break_duration_minutes" type="number" min="0" value="{{ channel.ads.min_ad_break_duration_minutes }}">
+              </div>
+              <div class="col-md-3">
+                <label class="form-label" for="ads_max_ad_break_duration_minutes">Max Break Min</label>
+                <input class="form-control" id="ads_max_ad_break_duration_minutes" name="ads_max_ad_break_duration_minutes" type="number" min="0" value="{{ channel.ads.max_ad_break_duration_minutes }}">
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="card mb-3">
+          <div class="card-header">Daypart Ad Estimate</div>
+          <div class="card-body">
+            <div class="table-responsive">
+              <table class="table align-middle">
+                <thead>
+                  <tr>
+                    <th>Daypart</th>
+                    <th>Window</th>
+                    <th>Days</th>
+                    <th>Eligible Min</th>
+                    <th>Density</th>
+                    <th>Target</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for row in ad_plan.rows %}
+                  <tr>
+                    <td>{{ row.name }}</td>
+                    <td>{{ row.window }}</td>
+                    <td>{{ row.days }}</td>
+                    <td>{% if row.eligible %}{{ row.content_minutes }}{% else %}<span class="text-secondary">off-air</span>{% endif %}</td>
+                    <td>{{ "%.2f"|format(row.density) }}</td>
+                    <td>{{ row.target_minutes }}m</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            <div class="form-text">Estimate only. Final ads depend on selected programs, fitted filler spot durations, and schedule boundaries.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-pane fade" id="continuity" data-profile-scope="advanced general_tv">
+        <div class="card mb-3">
+          <div class="card-header">Continuity</div>
+          <div class="card-body">
+            <div class="row g-3">
+              <div class="col-md-2">
+                <div class="form-check mt-4">
+                  <input class="form-check-input" id="continuity_enabled" name="continuity_enabled" type="checkbox" {% if channel.continuity.enabled %}checked{% endif %}>
+                  <label class="form-check-label" for="continuity_enabled">Enabled</label>
+                </div>
+              </div>
+              <div class="col-md-2">
+                <label class="form-label" for="continuity_frequency">
+                  Frequency
+                  <button class="help-dot" type="button" data-bs-toggle="tooltip"
+                          data-bs-title="Default continuity cadence when a daypart does not provide its own value. 0 disables continuity insertion.">?</button>
+                </label>
+                <input class="form-control" id="continuity_frequency" name="continuity_frequency" type="number" min="0" value="{{ channel.continuity.frequency }}">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label" for="continuity_station_id_custom_show_id">Station ID List</label>
+                <select class="form-select" id="continuity_station_id_custom_show_id" name="continuity_station_id_custom_show_id">
+                  <option value="">Manual IDs / default</option>
+                  {% for option in custom_show_options %}
+                  <option value="{{ option.id }}" {% if option.id == channel.continuity.station_id_custom_show_id %}selected{% endif %}>{{ option.name }}</option>
+                  {% endfor %}
+                  {% if channel.continuity.station_id_custom_show_id and channel.continuity.station_id_custom_show_id not in custom_show_options|map(attribute='id')|list %}
+                  <option value="{{ channel.continuity.station_id_custom_show_id }}" selected>{{ channel.continuity.station_id_custom_show_id }}</option>
+                  {% endif %}
+                </select>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label" for="continuity_bumper_custom_show_id">Bumper List</label>
+                <select class="form-select" id="continuity_bumper_custom_show_id" name="continuity_bumper_custom_show_id">
+                  <option value="">Manual IDs / default</option>
+                  {% for option in custom_show_options %}
+                  <option value="{{ option.id }}" {% if option.id == channel.continuity.bumper_custom_show_id %}selected{% endif %}>{{ option.name }}</option>
+                  {% endfor %}
+                  {% if channel.continuity.bumper_custom_show_id and channel.continuity.bumper_custom_show_id not in custom_show_options|map(attribute='id')|list %}
+                  <option value="{{ channel.continuity.bumper_custom_show_id }}" selected>{{ channel.continuity.bumper_custom_show_id }}</option>
+                  {% endif %}
+                </select>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label" for="continuity_station_id_clip_ids">Manual Station IDs</label>
+                <input class="form-control" id="continuity_station_id_clip_ids" name="continuity_station_id_clip_ids" value="{{ channel.continuity.station_id_clip_ids|join(', ') }}">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label" for="continuity_bumper_clip_ids">Manual Bumper IDs</label>
+                <input class="form-control" id="continuity_bumper_clip_ids" name="continuity_bumper_clip_ids" value="{{ channel.continuity.bumper_clip_ids|join(', ') }}">
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-pane fade" id="advanced" data-profile-scope="advanced">
+        <div class="card mb-3">
+          <div class="card-header">Import Channel Config</div>
+          <div class="card-body">
+            <div class="form-text mb-2">Paste a JSON export from another channel. The current Tunarr channel ID is kept.</div>
+            <textarea class="form-control mb-2" name="import_json" form="channel-import-form" rows="8"></textarea>
+            <button class="btn btn-outline-warning" type="submit" form="channel-import-form">
+              Import JSON
+            </button>
+          </div>
+        </div>
+        <div class="card mb-3">
+          <div class="card-header">Rotations</div>
+          <div class="card-body">
+            <div class="form-text mb-2">Named rotations are the advanced fallback sources used by dayparts. Keep names stable when dayparts reference them.</div>
+            <textarea class="form-control" name="rotations_yaml">{{ rotations_yaml }}</textarea>
+          </div>
+        </div>
+        <div class="card mb-3">
+          <div class="card-header">Pipeline</div>
+          <div class="card-body">
+            <textarea class="form-control" name="pipeline_text">{{ pipeline_text }}</textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="action-bar mb-4">
+      <button class="btn btn-gold" type="submit">Save Channel</button>
+      <a class="btn btn-outline-secondary" href="{{ return_to }}">Cancel</a>
+    </div>
+  </form>
+  <form id="channel-import-form"
+        method="post"
+        action="/channels/{{ channel.id }}/config/import"
+        onsubmit="return confirm('Import channel config JSON into this channel?');">
+    <input type="hidden" name="return_to" value="{{ return_to }}">
+  </form>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  const daypartList = document.getElementById("daypart-list");
+  const daypartIndices = document.getElementById("daypart-indices");
+  const initialDaypart = daypartList.querySelector(".daypart-card");
+  const daypartPrototype = initialDaypart ? initialDaypart.cloneNode(true) : null;
+  document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach((element) => {
+    new bootstrap.Tooltip(element);
+  });
+  const channelProfileSelect = document.getElementById("channel_profile");
+  const channelProfileDescription = document.getElementById("channel-profile-description");
+  let nextDaypartIndex = Math.max(
+    0,
+    ...Array.from(daypartList.querySelectorAll(".daypart-card"))
+      .map((card) => Number(card.dataset.daypartIndex) + 1),
+  );
+
+  function profileAllows(element, profile) {
+    const scope = element.dataset.profileScope;
+    if (!scope || profile === "advanced") return true;
+    return scope.split(/\s+/).includes(profile);
+  }
+
+  function applyChannelProfile({ applyDefaults = false } = {}) {
+    const profile = channelProfileSelect?.value || "advanced";
+    const selectedOption = channelProfileSelect?.selectedOptions?.[0];
+    if (channelProfileDescription) {
+      channelProfileDescription.textContent = selectedOption?.dataset.description || "";
+    }
+    document.querySelectorAll("[data-profile-scope]").forEach((element) => {
+      element.hidden = !profileAllows(element, profile);
+    });
+    const activeTab = document.querySelector(".nav-tabs .nav-link.active");
+    if (activeTab?.hidden) {
+      const generalTab = document.querySelector('[data-bs-target="#general"]');
+      bootstrap.Tab.getOrCreateInstance(generalTab).show();
+    }
+    if (!applyDefaults) return;
+    daypartList.querySelectorAll(".daypart-card").forEach((card) => {
+      const index = card.dataset.daypartIndex;
+      const content = card.querySelector(`[name="daypart_content_mode_${index}"]`);
+      const allowMovies = card.querySelector(`[name="daypart_allow_movies_${index}"]`);
+      const variableMovie = card.querySelector(`[name="daypart_variable_movie_duration_${index}"]`);
+      const movieSelection = card.querySelector(`[name="daypart_movie_selection_${index}"]`);
+      const offAir = card.querySelector(`[name="daypart_off_air_${index}"]`)?.checked;
+      if (profile === "movie_channel" && !offAir) {
+        if (content) content.value = "movies";
+        if (allowMovies) allowMovies.checked = true;
+        if (variableMovie) variableMovie.checked = true;
+        if (movieSelection && !movieSelection.value) movieSelection.value = "library_random";
+      }
+      if (profile === "series_marathon" && !offAir) {
+        if (content) content.value = "series";
+        if (allowMovies) allowMovies.checked = false;
+        if (variableMovie) variableMovie.checked = false;
+      }
+      updateDaypartSummary(card);
+    });
+    updateDaypartWarnings();
+  }
+
+  function updateDaypartIndices() {
+    daypartIndices.value = Array.from(daypartList.querySelectorAll(".daypart-card"))
+      .map((card) => card.dataset.daypartIndex)
+      .join(",");
+    updateMoveButtons();
+    updateCopySelects();
+    daypartList.querySelectorAll(".daypart-card").forEach(updateDaypartSummary);
+    updateDaypartWarnings();
+  }
+
+  function replaceIndex(value, oldIndex, newIndex) {
+    return value
+      .replaceAll(`_${oldIndex}_`, `_${newIndex}_`)
+      .replace(new RegExp(`_${oldIndex}$`), `_${newIndex}`);
+  }
+
+  function reindexDaypart(card, oldIndex, newIndex) {
+    card.dataset.daypartIndex = String(newIndex);
+    const body = card.querySelector(".daypart-card-body");
+    if (body) body.id = `daypart-body-${newIndex}`;
+    const toggle = card.querySelector(".toggle-daypart-body");
+    if (toggle) {
+      toggle.dataset.bsTarget = `#daypart-body-${newIndex}`;
+      toggle.setAttribute("aria-controls", `daypart-body-${newIndex}`);
+      toggle.setAttribute("aria-expanded", "true");
+      toggle.textContent = "Collapse";
+    }
+    card.querySelectorAll("[name]").forEach((field) => {
+      field.name = replaceIndex(field.name, oldIndex, newIndex);
+    });
+    card.querySelectorAll("[id]").forEach((field) => {
+      field.id = replaceIndex(field.id, oldIndex, newIndex);
+    });
+    card.querySelectorAll("label[for]").forEach((label) => {
+      label.htmlFor = replaceIndex(label.htmlFor, oldIndex, newIndex);
+    });
+  }
+
+  function resetDaypart(card, oldIndex, newIndex) {
+    reindexDaypart(card, oldIndex, newIndex);
+    card.querySelector(".daypart-title").textContent = "New Daypart";
+    card.querySelectorAll("input[type='checkbox']").forEach((field) => {
+      field.checked = field.name.startsWith("daypart_days_");
+    });
+    card.querySelector(`[name="daypart_name_${newIndex}"]`).value = "new-daypart";
+    card.querySelector(`[name="daypart_start_${newIndex}"]`).value = "06:00";
+    card.querySelector(`[name="daypart_end_${newIndex}"]`).value = "12:00";
+    card.querySelector(`[name="daypart_content_mode_${newIndex}"]`).value = "series";
+    card.querySelector(`[name="daypart_slot_duration_${newIndex}"]`).value = "30";
+    card.querySelector(`[name="daypart_movie_selection_${newIndex}"]`).value = "best_fit";
+    card.querySelector(`[name="daypart_movie_slot_count_${newIndex}"]`).value = "0";
+    card.querySelector(`[name="daypart_end_tolerance_minutes_${newIndex}"]`).value = "0";
+    card.querySelector(`[name="daypart_ad_density_${newIndex}"]`).value = "0.08";
+    card.querySelector(`[name="daypart_continuity_frequency_${newIndex}"]`).value = "4";
+    updateDaypartSummary(card);
+  }
+
+  function duplicateDaypart(sourceCard) {
+    const card = sourceCard.cloneNode(true);
+    const oldIndex = Number(card.dataset.daypartIndex);
+    const newIndex = nextDaypartIndex;
+    reindexDaypart(card, oldIndex, newIndex);
+    nextDaypartIndex += 1;
+    const nameField = card.querySelector(`[name="daypart_name_${newIndex}"]`);
+    nameField.value = `${nameField.value || "daypart"}-copy`;
+    card.querySelector(".daypart-title").textContent = nameField.value;
+    sourceCard.after(card);
+    updateDaypartIndices();
+    card.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function minutes(value) {
+    const parts = String(value || "00:00").split(":").map((part) => Number(part));
+    if (parts.length !== 2 || Number.isNaN(parts[0]) || Number.isNaN(parts[1])) return 0;
+    return Math.max(0, Math.min(1439, parts[0] * 60 + parts[1]));
+  }
+
+  function fmtMinutes(value) {
+    if (value >= 1440) return "24:00";
+    return `${String(Math.floor(value / 60)).padStart(2, "0")}:${String(value % 60).padStart(2, "0")}`;
+  }
+
+  function escapeHtml(value) {
+    return String(value)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+
+  function selectedValues(card, selector) {
+    return Array.from(card.querySelectorAll(selector))
+      .filter((field) => field.checked)
+      .map((field) => field.value);
+  }
+
+  function checkedLabels(card, selector) {
+    return Array.from(card.querySelectorAll(selector))
+      .filter((field) => field.checked)
+      .map((field) => {
+        const label = card.querySelector(`label[for="${field.id}"]`);
+        return label ? label.textContent.trim() : field.value;
+      });
+  }
+
+  function setCheckedValues(card, selector, values) {
+    const wanted = new Set(values);
+    card.querySelectorAll(selector).forEach((field) => {
+      field.checked = wanted.has(field.value);
+    });
+  }
+
+  function daypartDuration(startValue, endValue) {
+    const start = minutes(startValue);
+    const end = minutes(endValue);
+    if (start === end) return 0;
+    return end > start ? end - start : 1440 - start + end;
+  }
+
+  function updateDaypartSummary(card) {
+    const index = card.dataset.daypartIndex;
+    const summary = card.querySelector("[data-daypart-summary]");
+    if (!summary) return;
+    const start = card.querySelector(`[name="daypart_start_${index}"]`)?.value || "00:00";
+    const end = card.querySelector(`[name="daypart_end_${index}"]`)?.value || "00:00";
+    const days = selectedValues(card, `[name="daypart_days_${index}"]`);
+    const playlists = checkedLabels(card, `[name="daypart_playlist_ids_${index}"]`);
+    const customShows = checkedLabels(card, `[name="daypart_custom_show_list_ids_${index}"]`);
+    const contentMode = card.querySelector(`[name="daypart_content_mode_${index}"]`)?.value || "series";
+    const flags = [];
+    if (card.querySelector(`[name="daypart_off_air_${index}"]`)?.checked) flags.push("off-air");
+    if (card.querySelector(`[name="daypart_allow_movies_${index}"]`)?.checked) flags.push("movies");
+    if (card.querySelector(`[name="daypart_variable_movie_duration_${index}"]`)?.checked) flags.push("variable");
+    const source = playlists.length || customShows.length
+      ? `${playlists.length} playlist / ${customShows.length} custom`
+      : "library fallback";
+    const duration = daypartDuration(start, end);
+    summary.textContent = `${start}-${end} / ${Math.round(duration / 60)}h / ${days.length} days / ${contentMode} / ${source}${flags.length ? " / " + flags.join(", ") : ""}`;
+  }
+
+  function updateCopySelects() {
+    const cards = Array.from(daypartList.querySelectorAll(".daypart-card"));
+    const options = cards.map((card) => {
+      const index = card.dataset.daypartIndex;
+      const name = card.querySelector(`[name="daypart_name_${index}"]`)?.value.trim()
+        || card.querySelector(".daypart-title")?.textContent.trim()
+        || `Daypart ${index}`;
+      return { index, name };
+    });
+    cards.forEach((card) => {
+      const select = card.querySelector(".copy-daypart-select");
+      if (!select) return;
+      const current = select.value;
+      const ownIndex = card.dataset.daypartIndex;
+      select.innerHTML = options
+        .filter((option) => option.index !== ownIndex)
+        .map((option) => `<option value="${escapeHtml(option.index)}">${escapeHtml(option.name)}</option>`)
+        .join("");
+      if (Array.from(select.options).some((option) => option.value === current)) {
+        select.value = current;
+      }
+      select.disabled = select.options.length === 0;
+      card.querySelector(".copy-daypart-sources").disabled = select.disabled;
+      card.querySelector(".copy-daypart-days").disabled = select.disabled;
+    });
+  }
+
+  function copyDaypartValues(targetCard, sourceCard, kind) {
+    const target = targetCard.dataset.daypartIndex;
+    const source = sourceCard.dataset.daypartIndex;
+    if (kind === "sources") {
+      setCheckedValues(
+        targetCard,
+        `[name="daypart_playlist_ids_${target}"]`,
+        selectedValues(sourceCard, `[name="daypart_playlist_ids_${source}"]`),
+      );
+      setCheckedValues(
+        targetCard,
+        `[name="daypart_custom_show_list_ids_${target}"]`,
+        selectedValues(sourceCard, `[name="daypart_custom_show_list_ids_${source}"]`),
+      );
+      const targetRotation = targetCard.querySelector(`[name="daypart_rotation_${target}"]`);
+      const sourceRotation = sourceCard.querySelector(`[name="daypart_rotation_${source}"]`);
+      if (targetRotation && sourceRotation) targetRotation.value = sourceRotation.value;
+      return;
+    }
+    setCheckedValues(
+      targetCard,
+      `[name="daypart_days_${target}"]`,
+      selectedValues(sourceCard, `[name="daypart_days_${source}"]`),
+    );
+  }
+
+  function updateDaypartWarnings() {
+    const panel = document.getElementById("daypart-warnings");
+    if (!panel) return;
+    const cards = Array.from(daypartList.querySelectorAll(".daypart-card"));
+    const warnings = [];
+    const dayLabels = { mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat", sun: "Sun" };
+    const dayOrder = Object.keys(dayLabels);
+    const names = new Map();
+    const intervals = Object.fromEntries(dayOrder.map((day) => [day, []]));
+    if (!cards.length) warnings.push("No dayparts are configured; the standby source will cover the schedule.");
+    cards.forEach((card) => {
+      const index = card.dataset.daypartIndex;
+      const name = card.querySelector(`[name="daypart_name_${index}"]`)?.value.trim() || "unnamed";
+      const key = name.toLowerCase();
+      names.set(key, (names.get(key) || 0) + 1);
+      const start = minutes(card.querySelector(`[name="daypart_start_${index}"]`)?.value);
+      const end = minutes(card.querySelector(`[name="daypart_end_${index}"]`)?.value);
+      const days = Array.from(card.querySelectorAll(`[name="daypart_days_${index}"]:checked`)).map((field) => field.value);
+      const duration = daypartDuration(
+        card.querySelector(`[name="daypart_start_${index}"]`)?.value,
+        card.querySelector(`[name="daypart_end_${index}"]`)?.value,
+      );
+      const slotMinutes = Number(card.querySelector(`[name="daypart_slot_duration_${index}"]`)?.value || 0);
+      const movieSlots = Number(card.querySelector(`[name="daypart_movie_slot_count_${index}"]`)?.value || 0);
+      const endTolerance = Number(card.querySelector(`[name="daypart_end_tolerance_minutes_${index}"]`)?.value || 0);
+      const allowMovies = card.querySelector(`[name="daypart_allow_movies_${index}"]`)?.checked;
+      const variableMovie = card.querySelector(`[name="daypart_variable_movie_duration_${index}"]`)?.checked;
+      const contentMode = card.querySelector(`[name="daypart_content_mode_${index}"]`)?.value || "series";
+      const offAir = card.querySelector(`[name="daypart_off_air_${index}"]`)?.checked;
+      const customShows = card.querySelectorAll(`[name="daypart_custom_show_list_ids_${index}"]:checked`).length;
+      if (!days.length) warnings.push(`${name} has no active days.`);
+      if (start === end) warnings.push(`${name} starts and ends at the same time.`);
+      if (slotMinutes <= 0) warnings.push(`${name} has a non-positive slot duration.`);
+      if (slotMinutes > 0 && duration > 0 && slotMinutes > duration) warnings.push(`${name} slot duration is longer than the daypart window.`);
+      if (contentMode === "movies" && !allowMovies) warnings.push(`${name} is movie-only but movies are disabled.`);
+      if (!allowMovies && movieSlots > 0) warnings.push(`${name} has movie slots but movies are disabled.`);
+      if (!allowMovies && variableMovie) warnings.push(`${name} has variable movie timing enabled but movies are disabled.`);
+      if (duration > 0 && endTolerance >= duration) warnings.push(`${name} end tolerance is longer than the daypart window.`);
+      if (offAir && customShows === 0) warnings.push(`${name} is off-air but has no custom show loop selected.`);
+      days.forEach((day) => {
+        if (start === end) return;
+        if (start < end) {
+          intervals[day].push([start, end, name]);
+        } else {
+          intervals[day].push([start, 1440, name]);
+          const nextDay = dayOrder[(dayOrder.indexOf(day) + 1) % dayOrder.length];
+          intervals[nextDay].push([0, end, name]);
+        }
+      });
+    });
+    names.forEach((count, name) => {
+      if (count > 1) warnings.push(`Duplicate daypart name: ${name}.`);
+    });
+    dayOrder.forEach((day) => {
+      const sorted = intervals[day].sort((a, b) => a[0] - b[0]);
+      if (!sorted.length) {
+        warnings.push(`${dayLabels[day]} has no daypart coverage.`);
+        return;
+      }
+      let cursor = 0;
+      sorted.forEach(([start, end, name]) => {
+        if (start > cursor) warnings.push(`${dayLabels[day]} has a gap from ${fmtMinutes(cursor)} to ${fmtMinutes(start)}.`);
+        if (start < cursor) warnings.push(`${dayLabels[day]} has overlapping coverage near ${name}.`);
+        cursor = Math.max(cursor, end);
+      });
+      if (cursor < 1440) warnings.push(`${dayLabels[day]} has a gap from ${fmtMinutes(cursor)} to 24:00.`);
+    });
+    const uniqueWarnings = Array.from(new Set(warnings));
+    panel.classList.toggle("d-none", uniqueWarnings.length === 0);
+    panel.querySelector("ul").innerHTML = uniqueWarnings
+      .map((warning) => `<li>${escapeHtml(warning)}</li>`)
+      .join("");
+  }
+
+  function updateMoveButtons() {
+    const cards = Array.from(daypartList.querySelectorAll(".daypart-card"));
+    cards.forEach((card, index) => {
+      card.querySelector(".move-daypart-up").disabled = index === 0;
+      card.querySelector(".move-daypart-down").disabled = index === cards.length - 1;
+    });
+  }
+
+  document.getElementById("add-daypart").addEventListener("click", () => {
+    if (!daypartPrototype) return;
+    const card = daypartPrototype.cloneNode(true);
+    const oldIndex = Number(card.dataset.daypartIndex);
+    resetDaypart(card, oldIndex, nextDaypartIndex);
+    nextDaypartIndex += 1;
+    daypartList.appendChild(card);
+    updateDaypartIndices();
+    card.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+
+  daypartList.addEventListener("click", (event) => {
+    const upButton = event.target.closest(".move-daypart-up");
+    if (upButton) {
+      const card = upButton.closest(".daypart-card");
+      const previous = card.previousElementSibling;
+      if (previous) daypartList.insertBefore(card, previous);
+      updateDaypartIndices();
+      return;
+    }
+    const downButton = event.target.closest(".move-daypart-down");
+    if (downButton) {
+      const card = downButton.closest(".daypart-card");
+      const next = card.nextElementSibling;
+      if (next) daypartList.insertBefore(next, card);
+      updateDaypartIndices();
+      return;
+    }
+    const duplicateButton = event.target.closest(".duplicate-daypart");
+    if (duplicateButton) {
+      duplicateDaypart(duplicateButton.closest(".daypart-card"));
+      return;
+    }
+    const sourceCopyButton = event.target.closest(".copy-daypart-sources");
+    if (sourceCopyButton) {
+      const card = sourceCopyButton.closest(".daypart-card");
+      const sourceIndex = card.querySelector(".copy-daypart-select").value;
+      const sourceCard = daypartList.querySelector(`[data-daypart-index="${sourceIndex}"]`);
+      if (sourceCard) {
+        copyDaypartValues(card, sourceCard, "sources");
+        updateDaypartIndices();
+      }
+      return;
+    }
+    const dayCopyButton = event.target.closest(".copy-daypart-days");
+    if (dayCopyButton) {
+      const card = dayCopyButton.closest(".daypart-card");
+      const sourceIndex = card.querySelector(".copy-daypart-select").value;
+      const sourceCard = daypartList.querySelector(`[data-daypart-index="${sourceIndex}"]`);
+      if (sourceCard) {
+        copyDaypartValues(card, sourceCard, "days");
+        updateDaypartIndices();
+      }
+      return;
+    }
+    const removeButton = event.target.closest(".remove-daypart");
+    if (!removeButton) return;
+    removeButton.closest(".daypart-card").remove();
+    updateDaypartIndices();
+  });
+
+  daypartList.addEventListener("input", (event) => {
+    const target = event.target;
+    if (target.classList.contains("playlist-option-filter")) {
+      const query = target.value.trim().toLowerCase();
+      const card = target.closest(".daypart-card");
+      card.querySelectorAll(".playlist-option").forEach((row) => {
+        const haystack = [
+          row.dataset.name || "",
+          row.dataset.category || "",
+          row.dataset.tags || "",
+          row.dataset.scope || "",
+        ].join(" ");
+        row.hidden = query && !haystack.includes(query);
+      });
+      return;
+    }
+    if (!target.name || !target.name.startsWith("daypart_name_")) return;
+    target.closest(".daypart-card").querySelector(".daypart-title").textContent =
+      target.value || "New Daypart";
+    updateDaypartIndices();
+  });
+
+  daypartList.addEventListener("change", (event) => {
+    const card = event.target.closest(".daypart-card");
+    if (card && event.target.name?.startsWith("daypart_content_mode_") && event.target.value === "movies") {
+      const index = card.dataset.daypartIndex;
+      const allowMovies = card.querySelector(`[name="daypart_allow_movies_${index}"]`);
+      if (allowMovies) allowMovies.checked = true;
+    }
+    if (card) updateDaypartSummary(card);
+    updateDaypartIndices();
+  });
+  daypartList.addEventListener("shown.bs.collapse", (event) => {
+    const card = event.target.closest(".daypart-card");
+    card?.querySelector(".toggle-daypart-body")?.replaceChildren("Collapse");
+  });
+  daypartList.addEventListener("hidden.bs.collapse", (event) => {
+    const card = event.target.closest(".daypart-card");
+    card?.querySelector(".toggle-daypart-body")?.replaceChildren("Expand");
+  });
+  channelProfileSelect?.addEventListener("change", () => {
+    applyChannelProfile({ applyDefaults: true });
+  });
+  applyChannelProfile();
+  updateDaypartIndices();
+</script>
+</body>
+</html>

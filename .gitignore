@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+build/
+dist/
+.eggs/
+
+# Local environments and tooling caches
+.venv/
+.*-venv/
+.test-venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Temporary transfer/update artifacts
+transfer_patch/
+server-update/
+generated_summary.py
+inspect_*.py
+probe_tunarr_paths.py
+programming_*.py
+route_inspect*.py
+generate_schedule.py
+
+# Runtime data
+*.db
+*.sqlite
+*.sqlite3
+config.yaml
+checkpoints/
+logs/
+backups/
+
+# Local secrets and deployment-only files
+.env
+.env.*
+!.env.example
+server/
+*.pem
+*.key
+id_ed25519*
+
+# Project-private planning/handoff docs when this folder is copied together with
+# a local workspace root.
+info/
+AI_*.md
+*_HANDOFF*.md
+*_RUNBOOK*.md

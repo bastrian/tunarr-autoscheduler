@@ -1,0 +1,72 @@
+{% for v in versions %}
+<tr id="schedule-version-{{ v.version }}">
+  <td>
+    {% if v.status != "uploaded" %}
+    <input class="form-check-input" type="checkbox" name="selected_versions" value="{{ v.version }}"
+           aria-label="Select schedule version {{ v.version }}">
+    {% endif %}
+  </td>
+  <td>{{ v.version }}</td>
+  <td>
+    {% if v.status == "uploaded" %}
+    <span class="badge text-bg-success">{{ v.status }}</span>
+    {% elif v.status == "approved" %}
+    <span class="badge text-bg-primary">{{ v.status }}</span>
+    {% elif v.status == "draft" %}
+    <span class="badge text-bg-warning">{{ v.status }}</span>
+    {% elif v.status == "invalid" %}
+    <span class="badge text-bg-danger">{{ v.status }}</span>
+    {% elif v.status == "rejected" %}
+    <span class="badge text-bg-dark">{{ v.status }}</span>
+    {% else %}
+    <span class="badge text-bg-secondary">{{ v.status }}</span>
+    {% endif %}
+  </td>
+  <td class="small">{{ v.planned_start|local_datetime(timezone) }}<br>{{ v.planned_end|local_datetime(timezone) }}</td>
+  <td>{{ v.created_at|local_datetime(timezone) }}</td>
+  <td>
+    <div class="d-flex flex-wrap gap-1 align-items-center">
+    <a href="/schedules/{{ channel.id }}/preview/{{ v.version }}" class="btn btn-sm btn-gold">Preview</a>
+    {% if not loop.first %}
+    <a href="/schedules/{{ channel.id }}/diff?from={{ v.version }}&to={{ versions[0].version }}"
+       class="btn btn-sm btn-outline-info">Diff Latest</a>
+    {% endif %}
+    {% if v.status == "draft" %}
+    <button type="button" class="btn btn-sm btn-outline-success"
+            hx-post="/schedules/{{ channel.id }}/{{ v.version }}/approve"
+            hx-target="#notifications" hx-swap="innerHTML"
+            hx-disabled-elt="closest tr button">Approve</button>
+    <button type="button" class="btn btn-sm btn-outline-warning"
+            hx-post="/schedules/{{ channel.id }}/{{ v.version }}/reject"
+            hx-target="#notifications" hx-swap="innerHTML"
+            hx-disabled-elt="closest tr button">Reject</button>
+    {% elif v.status == "approved" or v.status == "uploaded" %}
+    <button type="button" class="btn btn-sm btn-outline-info"
+            hx-post="/schedules/{{ channel.id }}/{{ v.version }}/upload"
+            hx-target="#notifications" hx-swap="innerHTML"
+            hx-disabled-elt="closest tr button">
+      {% if v.status == "uploaded" %}Re-upload{% else %}Upload{% endif %}
+    </button>
+    {% if v.status == "approved" %}
+    <button type="button" class="btn btn-sm btn-outline-warning"
+            hx-post="/schedules/{{ channel.id }}/{{ v.version }}/reject"
+            hx-target="#notifications" hx-swap="innerHTML"
+            hx-disabled-elt="closest tr button">Reject</button>
+    {% endif %}
+    {% endif %}
+    <button type="button" class="btn btn-sm btn-outline-light"
+            hx-post="/schedules/{{ channel.id }}/{{ v.version }}/rollback"
+            hx-target="#notifications" hx-swap="innerHTML"
+            hx-disabled-elt="closest tr button"
+            hx-confirm="Create a new draft by rolling back to schedule version {{ v.version }}?">Rollback</button>
+    {% if v.status != "uploaded" %}
+    <button type="button" class="btn btn-sm btn-outline-danger"
+            hx-delete="/schedules/{{ channel.id }}/{{ v.version }}"
+            hx-target="#notifications" hx-swap="innerHTML"
+            hx-disabled-elt="closest tr button"
+            hx-confirm="Delete schedule version {{ v.version }}?">Delete</button>
+    {% endif %}
+    </div>
+  </td>
+</tr>
+{% endfor %}

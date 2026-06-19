@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Playlists - Tunarr AutoScheduler</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="/static/app.css" rel="stylesheet">
+</head>
+<body>
+{% set active_page = "playlists" %}
+{% include "_nav.html" %}
+<main class="container">
+  <div class="page-header">
+    <h1>Playlists</h1>
+    <div class="action-bar">
+      <a class="btn btn-outline-secondary" href="/playlist-categories">Manage Categories</a>
+      <a class="btn btn-gold" href="/playlists/new">New Playlist</a>
+    </div>
+  </div>
+  {% if saved %}<div class="alert alert-success">Playlist saved.</div>{% endif %}
+  {% if deleted %}<div class="alert alert-success">Playlist deleted.</div>{% endif %}
+  {% if delete_blocked %}<div class="alert alert-warning">Playlist is still used by at least one channel daypart.</div>{% endif %}
+  {% if category_saved %}<div class="alert alert-success">Category saved.</div>{% endif %}
+  {% if category_deleted %}<div class="alert alert-success">Category deleted.</div>{% endif %}
+  <form class="filter-panel mb-3" method="get" action="/playlists">
+    <div class="row g-3 align-items-end">
+      <div class="col-md-3">
+        <label class="form-label" for="playlist-q">Search</label>
+        <input class="form-control" id="playlist-q" name="q" value="{{ filters.q }}" placeholder="Name, description, tag">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label" for="playlist-category">Category</label>
+        <select class="form-select" id="playlist-category" name="category">
+          <option value="">All categories</option>
+          <option value="__none__" {% if filters.category == "__none__" %}selected{% endif %}>No category</option>
+          {% for category in categories %}
+          <option value="{{ category.id }}" {% if filters.category == category.id %}selected{% endif %}>{{ category.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label" for="playlist-tag">Tag</label>
+        <select class="form-select" id="playlist-tag" name="tag">
+          <option value="">All tags</option>
+          {% for tag in tags %}
+          <option value="{{ tag }}" {% if filters.tag == tag %}selected{% endif %}>{{ tag }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label" for="playlist-scope">Channel</label>
+        <select class="form-select" id="playlist-scope" name="scope">
+          <option value="">All scopes</option>
+          <option value="__global__" {% if filters.scope == "__global__" %}selected{% endif %}>Global</option>
+          {% for channel in channels %}
+          <option value="{{ channel.id }}" {% if filters.scope == channel.id %}selected{% endif %}>{{ channel.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label" for="playlist-sort">Sort</label>
+        <select class="form-select" id="playlist-sort" name="sort">
+          <option value="name" {% if filters.sort == "name" %}selected{% endif %}>Name</option>
+          <option value="category" {% if filters.sort == "category" %}selected{% endif %}>Category</option>
+          <option value="scope" {% if filters.sort == "scope" %}selected{% endif %}>Channel</option>
+          <option value="updated" {% if filters.sort == "updated" %}selected{% endif %}>Updated</option>
+        </select>
+      </div>
+      <div class="col-md-1 d-grid">
+        <button class="btn btn-outline-light" type="submit">Apply</button>
+      </div>
+    </div>
+  </form>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle">
+      <thead><tr><th>Name</th><th>Organization</th><th>Contents</th><th>Used By</th><th>Description</th><th class="text-end">Actions</th></tr></thead>
+      <tbody>
+      {% for playlist in playlists %}
+        <tr>
+          <td>
+            <strong>{{ playlist.name }}</strong>
+            {% if playlist.tags %}
+            <div class="tag-list mt-1">
+              {% for tag in playlist.tags %}
+              <span class="tag-chip">
+                {{ tag }}
+                {% if tag_builder_links.get(tag) %}
+                <a href="{{ tag_builder_links.get(tag) }}" title="Build channel from this tag">Build</a>
+                {% endif %}
+              </span>
+              {% endfor %}
+            </div>
+            {% endif %}
+          </td>
+          <td>
+            <div>
+              {{ playlist.category_name or "No category" }}
+              {% if playlist.category_id and category_builder_links.get(playlist.category_id) %}
+              <a class="small ms-2" href="{{ category_builder_links.get(playlist.category_id) }}">Build channel</a>
+              {% endif %}
+            </div>
+            <div class="small text-secondary">
+              {% if playlist.channel_scope %}
+                {% set scoped = channels|selectattr("id", "equalto", playlist.channel_scope)|list %}
+                {{ scoped[0].name if scoped else playlist.channel_scope }}
+              {% else %}
+                Global
+              {% endif %}
+            </div>
+          </td>
+          <td>{{ playlist.items|selectattr('media_type', 'equalto', 'series')|list|length }} series,
+              {{ playlist.items|selectattr('media_type', 'equalto', 'movie')|list|length }} movies</td>
+          <td>
+            {% set used_by = usage.get(playlist.id, []) %}
+            {% if used_by %}
+            <span class="badge text-bg-info">{{ used_by|length }} use{{ "s" if used_by|length != 1 else "" }}</span>
+            <div class="small text-secondary">{{ used_by|join(", ") }}</div>
+            {% else %}
+            <span class="text-secondary">Unused</span>
+            {% endif %}
+          </td>
+          <td class="text-secondary">{{ playlist.description }}</td>
+          <td class="text-end">
+            <a class="btn btn-sm btn-outline-light" href="/playlists/{{ playlist.id }}/edit">Edit</a>
+            <form class="d-inline" method="post" action="/playlists/{{ playlist.id }}/delete">
+              <button class="btn btn-sm btn-outline-danger" type="submit"
+                      {% if usage.get(playlist.id) %}disabled title="Used by {{ usage.get(playlist.id)|join(', ') }}"{% endif %}>
+                Delete
+              </button>
+            </form>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6" class="text-secondary">No playlists match the current filters.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</main>
+</body>
+</html>

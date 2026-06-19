@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Recommendation Builder - Tunarr AutoScheduler</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="/static/app.css" rel="stylesheet">
+</head>
+<body>
+{% set active_page = "recommendations" %}
+{% include "_nav.html" %}
+<main class="container pb-4">
+  <div class="page-header">
+    <div>
+      <h1>Recommendation Builder</h1>
+      <div class="text-secondary">Build daypart or channel plans from themes, tags, genres, series, and movies.</div>
+    </div>
+    <div class="action-bar">
+      <a class="btn btn-outline-light" href="/recommendations/runs">Run History</a>
+      <a class="btn btn-outline-secondary" href="/recommendations">Recommendations</a>
+    </div>
+  </div>
+  {% if error %}<div class="alert alert-warning">{{ error }}</div>{% endif %}
+  {% if request.query_params.get("saved") == "1" %}
+  <div class="alert alert-success">Recommendation run saved. Review it in history before applying.</div>
+  {% endif %}
+  {% if rerun_source_id %}
+  <div class="alert alert-info">Fresh preview generated from saved run {{ rerun_source_id }}. Save it to keep this rerun.</div>
+  {% endif %}
+
+  <form class="filter-panel mb-3" method="get" action="/recommendations/builder">
+    <input type="hidden" name="preview" value="1">
+    <div class="row g-3 align-items-end">
+      <div class="col-md-3">
+        <label class="form-label" for="mode">Build</label>
+        <select class="form-select" id="mode" name="mode">
+          <option value="channel" {% if form.mode == "channel" %}selected{% endif %}>Whole channel</option>
+          <option value="daypart" {% if form.mode == "daypart" %}selected{% endif %}>Single daypart</option>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="builder_mode">Builder mode</label>
+        <select class="form-select" id="builder_mode" name="builder_mode">
+          <option value="scratch" {% if form.builder_mode == "scratch" %}selected{% endif %}>Start from scratch</option>
+          <option value="improve" {% if form.builder_mode == "improve" %}selected{% endif %}>Improve existing config</option>
+        </select>
+        <div class="form-text">Improve keeps the selected channel's current daypart windows.</div>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="channel_id">Target channel</label>
+        <select class="form-select" id="channel_id" name="channel_id">
+          <option value="">New local channel config</option>
+          {% for channel in channels %}
+          <option value="{{ channel.id }}" {% if form.channel_id == channel.id %}selected{% endif %}>{{ channel.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="channel_name">Plan/channel name</label>
+        <input class="form-control" id="channel_name" name="channel_name" value="{{ form.channel_name }}" placeholder="FlixWolf One">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="profile">Base profile</label>
+        <select class="form-select" id="profile" name="profile">
+          <option value="auto" {% if form.profile == "auto" %}selected{% endif %}>Auto per theme</option>
+          {% for profile in profiles %}
+          <option value="{{ profile.id }}" {% if form.profile == profile.id %}selected{% endif %}>{{ profile.name }}</option>
+          {% endfor %}
+        </select>
+        <div class="form-text">Auto picks the best recommendation profile for each theme.</div>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label" for="themes">Themes across the day</label>
+        <input class="form-control" id="themes" name="themes" value="{{ form.themes }}" placeholder="morning sitcoms, documentaries, crime, sci-fi">
+        <div class="form-text">Comma-separated. For whole channels each theme becomes a daypart window.</div>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label" for="seed">Seed title, series, movie, or extra tags</label>
+        <input class="form-control" id="seed" name="seed" value="{{ form.seed }}" placeholder="Chernobyl, Star Trek, anime">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label" for="per_theme_limit">Items/theme</label>
+        <input class="form-control" id="per_theme_limit" name="per_theme_limit" type="number" min="1" max="100" value="{{ form.per_theme_limit }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="balance_mode">Content balance</label>
+        <select class="form-select" id="balance_mode" name="balance_mode">
+          <option value="tv_balanced" {% if form.balance_mode == "tv_balanced" %}selected{% endif %}>TV balanced</option>
+          <option value="series_heavy" {% if form.balance_mode == "series_heavy" %}selected{% endif %}>Series heavy</option>
+          <option value="series_only" {% if form.balance_mode == "series_only" %}selected{% endif %}>Series only</option>
+          <option value="mixed" {% if form.balance_mode == "mixed" %}selected{% endif %}>Mixed</option>
+          <option value="movie_friendly" {% if form.balance_mode == "movie_friendly" %}selected{% endif %}>Movie friendly</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label" for="max_movies_per_theme">Max movies</label>
+        <input class="form-control" id="max_movies_per_theme" name="max_movies_per_theme" type="number" min="0" max="100" value="{{ '' if form.max_movies_per_theme is none else form.max_movies_per_theme }}" placeholder="auto">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label" for="min_series_per_theme">Min series</label>
+        <input class="form-control" id="min_series_per_theme" name="min_series_per_theme" type="number" min="1" max="100" value="{{ form.min_series_per_theme }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="language_rule">Language</label>
+        <select class="form-select" id="language_rule" name="language_rule">
+          {% for value, label in language_rules.items() %}
+          <option value="{{ value }}" {% if form.language_rule == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <div class="form-check form-switch form-switch-card">
+          <input class="form-check-input" id="create_channel" name="create_channel" type="checkbox" value="1" {% if form.create_channel %}checked{% endif %}>
+          <label class="form-check-label" for="create_channel">Create local channel if missing</label>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="form-check form-switch form-switch-card">
+          <input class="form-check-input" id="replace_dayparts" name="replace_dayparts" type="checkbox" value="1" {% if form.replace_dayparts %}checked{% endif %}>
+          <label class="form-check-label" for="replace_dayparts">Replace dayparts on apply</label>
+        </div>
+      </div>
+      <div class="col-md-3 d-grid">
+        <button class="btn btn-gold" type="submit">Preview Plan</button>
+      </div>
+    </div>
+  </form>
+
+  {% if suggestions %}
+  <div class="filter-panel mb-3">
+    <div class="small text-secondary mb-2">Theme suggestions from your Jellyfin metadata</div>
+    <div class="tag-list">
+      {% for suggestion in suggestions %}
+      <span class="tag-chip">{{ suggestion.name }} <span class="text-secondary">{{ suggestion.count }}</span></span>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if plan %}
+  {% if plan.source_context %}
+  <div class="alert alert-info">
+    Building from {{ plan.source_context.type }} <strong>{{ plan.source_context.name }}</strong>
+    using {{ plan.source_context.playlist_count }} matching playlist{{ "s" if plan.source_context.playlist_count != 1 else "" }} as recommendation signal.
+  </div>
+  {% endif %}
+  <form class="card mb-3" method="post" action="/recommendations/builder/runs">
+    {% for key, value in form.items() %}
+    {% if key != "manual_dayparts" and key != "preview" %}
+    <input type="hidden" name="{{ key }}" value="{{ value }}">
+    {% endif %}
+    {% endfor %}
+    <input type="hidden" name="preview" value="1">
+    <input type="hidden" name="daypart_count" value="{{ plan.dayparts|length }}">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <div>
+        <strong>{{ plan.title }}</strong>
+        <div class="small text-secondary">{{ plan.builder_mode_label }} / {{ plan.profile_name }} / {{ plan.themes|join(", ") }}</div>
+      </div>
+      <button class="btn btn-sm btn-gold" type="submit">Save Reviewed Run</button>
+    </div>
+    <div class="card-body">
+      {% for daypart in plan.dayparts %}
+      <div class="border-bottom pb-3 mb-3">
+        {% set index = loop.index0 %}
+        <input type="hidden" name="daypart_enabled_{{ index }}" value="1">
+        <div class="row g-3 align-items-end">
+          <div class="col-md-3">
+            <label class="form-label" for="daypart_name_{{ index }}">Daypart name</label>
+            <input class="form-control" id="daypart_name_{{ index }}" name="daypart_name_{{ index }}" value="{{ daypart.name }}">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label" for="daypart_theme_{{ index }}">Theme/search focus</label>
+            <input class="form-control" id="daypart_theme_{{ index }}" name="daypart_theme_{{ index }}" value="{{ daypart.theme }}">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label" for="daypart_start_{{ index }}">Start</label>
+            <input class="form-control" id="daypart_start_{{ index }}" name="daypart_start_{{ index }}" type="time" value="{{ daypart.start_time }}">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label" for="daypart_end_{{ index }}">End</label>
+            <input class="form-control" id="daypart_end_{{ index }}" name="daypart_end_{{ index }}" type="time" value="{{ daypart.end_time }}">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label" for="daypart_profile_{{ index }}">Profile</label>
+            <select class="form-select" id="daypart_profile_{{ index }}" name="daypart_profile_{{ index }}">
+              <option value="auto">Auto</option>
+              {% for profile in profiles %}
+              <option value="{{ profile.id }}" {% if daypart.profile == profile.id %}selected{% endif %}>{{ profile.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
+          <span class="type-badge type-{{ 'movie' if daypart.content_mode == 'movies' else 'series' }}">{{ daypart.content_mode }}</span>
+          <span class="text-secondary">{{ daypart.profile_name }} / {{ daypart["items"]|length }} items</span>
+          {% if daypart.balance %}
+          <span class="text-secondary">Balance: {{ daypart.balance.mode }}{% if daypart.balance.max_movies is not none %}, max {{ daypart.balance.max_movies }} movies{% endif %}, min {{ daypart.balance.min_series }} series</span>
+          {% endif %}
+        </div>
+        {% for warning in daypart.warnings %}
+        <div class="alert alert-warning py-2 mt-2 mb-0">{{ warning }}</div>
+        {% endfor %}
+        <div class="table-responsive mt-2">
+          <table class="table table-sm align-middle">
+            <tbody>
+              {% for item in daypart["items"][:12] %}
+              <tr>
+                <td><strong>{{ item.title }}</strong></td>
+                <td><span class="type-badge type-{{ item.media_type }}">{{ item.media_type }}</span></td>
+                <td>{{ item.score }}</td>
+                <td class="text-secondary">{{ item.reasons|join("; ") }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </form>
+  {% endif %}
+</main>
+</body>
+</html>

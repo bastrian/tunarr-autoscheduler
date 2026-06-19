@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Settings - Tunarr AutoScheduler</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="/static/app.css" rel="stylesheet">
+</head>
+<body>
+{% set active_page = "settings" %}
+{% include "_nav.html" %}
+<main class="container pb-4">
+  <div class="page-header"><h1>Settings</h1></div>
+  {% if request.query_params.get("saved") == "1" %}
+  <div class="alert alert-success">Settings saved.</div>
+  {% endif %}
+  {% if error %}
+  <div class="alert alert-danger">{{ error }}</div>
+  {% endif %}
+  {% if metadata_rate_limit_alert %}
+  <div class="alert alert-warning">
+    External metadata provider rate limit reached:
+    <strong>{{ metadata_rate_limit_alert.provider|upper }}</strong>.
+    The last refresh stopped retrying this provider after
+    {{ metadata_rate_limit_alert.attempts }} attempts at
+    {{ metadata_rate_limit_alert.created_at }}.
+  </div>
+  {% endif %}
+  <div class="card mb-3">
+    <div class="card-header">Application</div>
+    <div class="card-body">
+      <form method="post" action="/settings" class="row g-3 align-items-end">
+        <div class="col-md-6">
+          <label class="form-label" for="timezone">Timezone</label>
+          <input class="form-control" id="timezone" name="timezone"
+                 value="{{ config.timezone }}" list="timezone-options" required>
+          <datalist id="timezone-options">
+            <option value="Europe/Berlin">
+            <option value="UTC">
+            <option value="Europe/London">
+            <option value="America/New_York">
+            <option value="America/Los_Angeles">
+          </datalist>
+        </div>
+        <div class="col-md-auto">
+          <button class="btn btn-gold" type="submit">Save Settings</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  <div class="card mb-3">
+    <div class="card-header">Automated Backups</div>
+    <div class="card-body">
+      <form method="post" action="/settings" class="row g-3 align-items-end">
+        <input type="hidden" name="timezone" value="{{ config.timezone }}">
+        <input type="hidden" name="backups_submitted" value="1">
+        <div class="col-md-3">
+          <label class="form-label" for="backups_enabled">Scheduled Backups</label>
+          <div class="form-switch-card">
+            <input class="form-check-input" id="backups_enabled"
+                   name="backups_enabled" type="checkbox"
+                   {% if config.backups.enabled %}checked{% endif %}>
+            <label class="form-check-label" for="backups_enabled">Enabled</label>
+          </div>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label" for="backups_interval_hours">Interval Hours</label>
+          <input class="form-control" id="backups_interval_hours"
+                 name="backups_interval_hours" type="number" min="1"
+                 value="{{ config.backups.interval_hours }}">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label" for="backups_output_dir">Output Directory</label>
+          <input class="form-control" id="backups_output_dir"
+                 name="backups_output_dir" value="{{ config.backups.output_dir }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label" for="backups_retention_count">Keep Archives</label>
+          <input class="form-control" id="backups_retention_count"
+                 name="backups_retention_count" type="number" min="1"
+                 value="{{ config.backups.retention_count }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label" for="backups_min_free_mb">Min Free MB</label>
+          <input class="form-control" id="backups_min_free_mb"
+                 name="backups_min_free_mb" type="number" min="1"
+                 value="{{ config.backups.min_free_mb }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label" for="backups_size_multiplier">Size Multiplier</label>
+          <input class="form-control" id="backups_size_multiplier"
+                 name="backups_size_multiplier" type="number" min="1"
+                 value="{{ config.backups.size_multiplier }}">
+        </div>
+        <div class="col-md-auto">
+          <button class="btn btn-gold" type="submit">Save Backups</button>
+        </div>
+        <div class="col-12">
+          <div class="form-text">
+            Backups are skipped when free disk space is below the configured reserve or below the estimated source size multiplied by the safety factor.
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+  <div class="card mb-3">
+    <div class="card-header">Public Access</div>
+    <div class="card-body">
+      <form method="post" action="/settings" class="row g-3 align-items-end">
+        <input type="hidden" name="timezone" value="{{ config.timezone }}">
+        <input type="hidden" name="public_access_submitted" value="1">
+        <div class="col-md-5">
+          <label class="form-label" for="public_epg_access">EPG and Public Guide Exports</label>
+          <select class="form-select" id="public_epg_access" name="public_epg_access">
+            <option value="disabled" {% if config.public_access.epg == "disabled" %}selected{% endif %}>Deaktiviert</option>
+            <option value="jellyfin_login" {% if config.public_access.epg == "jellyfin_login" %}selected{% endif %}>Nur mit Jellyfin Login</option>
+            <option value="public" {% if config.public_access.epg == "public" %}selected{% endif %}>Public</option>
+          </select>
+          <div class="form-text">
+            Applies to /epg, /public/epg, standalone exports, JSON/XMLTV exports, and EPG images.
+          </div>
+        </div>
+        <div class="col-md-auto">
+          <button class="btn btn-gold" type="submit">Save Public Access</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  <div class="card mb-3">
+    <div class="card-header">Notifications</div>
+    <div class="card-body">
+      <form method="post" action="/settings" class="row g-3 align-items-end">
+        <input type="hidden" name="timezone" value="{{ config.timezone }}">
+        <input type="hidden" name="notifications_submitted" value="1">
+        <div class="col-md-3">
+          <label class="form-label" for="notifications_enabled">Notification Routing</label>
+          <div class="form-switch-card">
+            <input class="form-check-input" id="notifications_enabled"
+                   name="notifications_enabled" type="checkbox"
+                   {% if config.notifications.enabled %}checked{% endif %}>
+            <label class="form-check-label" for="notifications_enabled">Enabled</label>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" for="telegram_enabled">Telegram</label>
+          <div class="form-switch-card">
+            <input class="form-check-input" id="telegram_enabled"
+                   name="telegram_enabled" type="checkbox"
+                   {% if config.notifications.telegram.enabled %}checked{% endif %}>
+            <label class="form-check-label" for="telegram_enabled">Enabled</label>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label" for="telegram_bot_token">Telegram Bot Token</label>
+          <input class="form-control" id="telegram_bot_token" name="telegram_bot_token"
+                 type="password" value="{{ config.notifications.telegram.bot_token }}"
+                 autocomplete="off">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label" for="telegram_chat_id">Chat ID</label>
+          <input class="form-control" id="telegram_chat_id" name="telegram_chat_id"
+                 value="{{ config.notifications.telegram.chat_id }}">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" for="email_enabled">Email / SMTP</label>
+          <div class="form-switch-card">
+            <input class="form-check-input" id="email_enabled" name="email_enabled"
+                   type="checkbox" {% if config.notifications.email.enabled %}checked{% endif %}>
+            <label class="form-check-label" for="email_enabled">Enabled</label>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" for="email_smtp_host">SMTP Host</label>
+          <input class="form-control" id="email_smtp_host" name="email_smtp_host"
+                 value="{{ config.notifications.email.smtp_host }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label" for="email_smtp_port">Port</label>
+          <input class="form-control" id="email_smtp_port" name="email_smtp_port"
+                 type="number" min="1" value="{{ config.notifications.email.smtp_port }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label" for="email_username">Username</label>
+          <input class="form-control" id="email_username" name="email_username"
+                 value="{{ config.notifications.email.username }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label" for="email_password">Password</label>
+          <input class="form-control" id="email_password" name="email_password"
+                 type="password" value="{{ config.notifications.email.password }}"
+                 autocomplete="off">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" for="email_from_address">From</label>
+          <input class="form-control" id="email_from_address" name="email_from_address"
+                 value="{{ config.notifications.email.from_address }}">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="email_to_addresses">Recipients</label>
+          <input class="form-control" id="email_to_addresses" name="email_to_addresses"
+                 value="{{ config.notifications.email.to_addresses|join(', ') }}">
+          <div class="form-text">Comma-separated recipient list.</div>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" for="email_use_tls">SMTP TLS</label>
+          <div class="form-switch-card">
+            <input class="form-check-input" id="email_use_tls" name="email_use_tls"
+                   type="checkbox" {% if config.notifications.email.use_tls %}checked{% endif %}>
+            <label class="form-check-label" for="email_use_tls">Use STARTTLS</label>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" for="webhook_enabled">Webhook</label>
+          <div class="form-switch-card">
+            <input class="form-check-input" id="webhook_enabled" name="webhook_enabled"
+                   type="checkbox" {% if config.notifications.webhook.enabled %}checked{% endif %}>
+            <label class="form-check-label" for="webhook_enabled">Enabled</label>
+          </div>
+        </div>
+        <div class="col-md-9">
+          <label class="form-label" for="webhook_url">Webhook URL</label>
+          <input class="form-control" id="webhook_url" name="webhook_url"
+                 value="{{ config.notifications.webhook.url }}">
+        </div>
+        <div class="col-md-12">
+          <label class="form-label" for="webhook_headers_json">Webhook Headers JSON</label>
+          <textarea class="form-control font-monospace" id="webhook_headers_json"
+                    name="webhook_headers_json" rows="3">{{ webhook_headers_json }}</textarea>
+        </div>
+        <div class="col-12">
+          <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+            <h2 class="h5 mb-0">Routing Rules</h2>
+            <button class="btn btn-outline-secondary btn-sm" type="button" id="add-notification-rule">
+              Add Rule
+            </button>
+          </div>
+          <div id="notification-rule-list" class="vstack gap-2">
+            {% for rule in config.notifications.rules %}
+            {% set idx = loop.index0 %}
+            <div class="notification-rule-row border rounded p-2">
+              <div class="row g-2 align-items-end">
+                <div class="col-md-3">
+                  <label class="form-label">Event</label>
+                  <select class="form-select" name="rule_event_type">
+                    {% for event_type in notification_event_types %}
+                    <option value="{{ event_type }}" {% if rule.event_type == event_type %}selected{% endif %}>{{ event_type }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="col-md-2">
+                  <label class="form-label">Enabled</label>
+                  <div class="form-switch-card">
+                    <input class="form-check-input rule-enabled" name="rule_{{ idx }}_enabled"
+                           type="checkbox" {% if rule.enabled %}checked{% endif %}>
+                    <span>Enabled</span>
+                  </div>
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label">Providers</label>
+                  <div class="d-flex flex-wrap gap-2">
+                    {% for provider in notification_providers %}
+                    <label class="form-check-label">
+                      <input class="form-check-input rule-provider" name="rule_{{ idx }}_{{ provider }}"
+                             type="checkbox" {% if provider in rule.providers %}checked{% endif %}>
+                      {{ provider }}
+                    </label>
+                    {% endfor %}
+                  </div>
+                </div>
+                <div class="col-md-2">
+                  <label class="form-label">Throttle min</label>
+                  <input class="form-control rule-throttle" name="rule_{{ idx }}_throttle_minutes"
+                         type="number" min="0" value="{{ rule.throttle_minutes }}">
+                </div>
+                <div class="col-md-1">
+                  <label class="form-label">Quiet from</label>
+                  <input class="form-control rule-quiet-start" name="rule_{{ idx }}_quiet_start"
+                         value="{{ rule.quiet_hours_start }}" placeholder="22:00">
+                </div>
+                <div class="col-md-1">
+                  <label class="form-label">Quiet to</label>
+                  <input class="form-control rule-quiet-end" name="rule_{{ idx }}_quiet_end"
+                         value="{{ rule.quiet_hours_end }}" placeholder="07:00">
+                </div>
+                <div class="col-md-auto">
+                  <button class="btn btn-outline-danger btn-sm remove-notification-rule" type="button">
+                    Remove
+                  </button>
+                </div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="col-md-auto">
+          <button class="btn btn-gold" type="submit">Save Notifications</button>
+        </div>
+      </form>
+      <div class="mt-3">
+        <a class="btn btn-outline-secondary btn-sm" href="/notifications">Open Notification History</a>
+      </div>
+      {% if notification_events %}
+      <div class="table-responsive mt-3">
+        <table class="table table-hover align-middle">
+          <thead><tr><th>Time</th><th>Event</th><th>Provider</th><th>Status</th><th>Title</th></tr></thead>
+          <tbody>
+            {% for event in notification_events %}
+            <tr>
+              <td>{{ event.created_at }}</td>
+              <td>{{ event.event_type }}</td>
+              <td>{{ event.provider }}</td>
+              <td><span class="badge text-bg-secondary">{{ event.status }}</span></td>
+              <td>{{ event.title }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  <div class="card mb-3">
+    <div class="card-header">Public EPG Metadata</div>
+    <div class="card-body">
+      <div class="alert alert-info">
+        Provider access differs by service. TMDB asks clients to respect 429 responses,
+        OMDb offers patron-only poster access, and TVDB has licensed API tiers.
+        If your account allows higher throughput, increase the per-minute limit here.
+      </div>
+      {% if metadata_provider_status and metadata_provider_status.providers.jellystat %}
+      <div class="alert alert-secondary">
+        <div class="fw-semibold">Last Jellystat refresh</div>
+        <div class="small text-secondary">{{ metadata_provider_status.created_at }}</div>
+        <div class="d-flex flex-wrap gap-2 mt-2">
+          {% for name, status in metadata_provider_status.providers.jellystat.items() %}
+          <span class="badge {% if status.ok %}text-bg-success{% else %}text-bg-warning{% endif %}">
+            {{ name }}:
+            {% if status.ok %}OK{% else %}HTTP {{ status.status_code or "error" }}{% endif %}
+            / {{ status.rows or 0 }} rows
+          </span>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+      <form method="post" action="/settings" class="row g-3 align-items-end">
+        <input type="hidden" name="timezone" value="{{ config.timezone }}">
+        <input type="hidden" name="metadata_submitted" value="1">
+        {% if jellystat_test_result %}
+        <div class="col-12">
+          <div class="alert {% if jellystat_test_result.ok %}alert-success{% else %}alert-warning{% endif %} mb-0">
+            {{ jellystat_test_result.message }}
+          </div>
+        </div>
+        {% endif %}
+        <div class="col-md-3">
+          <label class="form-label" for="metadata_tmdb_enabled">TMDB Enrichment</label>
+          <div class="form-switch-card">
+            <input class="form-check-input" id="metadata_tmdb_enabled"
+                   name="metadata_tmdb_enabled" type="checkbox"
+                   {% if config.metadata.tmdb_enabled %}checked{% endif %}>
+            <label class="form-check-label" for="metadata_tmdb_enabled">Enabled</label>
+          </div>
+        </div>
+        <div class="col-md-5">
+          <label class="form-label" for="metadata_tmdb_api_key">TMDB API Key</label>
+          <input class="form-control" id="metadata_tmdb_api_key"
+                 name="metadata_tmdb_api_key" type="password"
+                 value="{{ config.metadata.tmdb_api_key }}" autocomplete="off">
+          <div class="form-text">Optional. Used only for public EPG artwork/overview fallback.</div>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label" for="metadata_tmdb_language">Language</label>
+          <input class="form-control" id="metadata_tmdb_language"
+                 name="metadata_tmdb_language" value="{{ config.metadata.tmdb_language }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label" for="metadata_tmdb_rate_limit_per_minute">TMDB / min</label>
+          <input class="form-control" id="metadata_tmdb_rate_limit_per_minute"
+                 name="metadata_tmdb_rate_limit_per_minute" type="number" min="1"
+                 value="{{ config.metadata.tmdb_rate_limit_per_minute }}">
+          <div class="form-text">Default is intentionally below TMDB's documented upper range.</div>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" for="metadata_tvdb_enabled">TVDB</label>
+          <div class="form-switch-card">
+            <input class="form-check-input" id="metadata_tvdb_enabled"
+                   name="metadata_tvdb_enabled" type="checkbox"
+                   {% if config.metadata.tvdb_enabled %}checked{% endif %}>
+            <label class="form-check-label" for="metadata_tvdb_enabled">Enabled</label>
+          </div>
+        </div>
+        <div class="col-md-5">
+          <label class="form-label" for="metadata_tvdb_api_key">TVDB API Key</label>
+          <input class="form-control" id="metadata_tvdb_api_key"
+                 name="metadata_tvdb_api_key" type="password"
+                 value="{{ config.metadata.tvdb_api_key }}" autocomplete="off">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label" for="metadata_tvdb_rate_limit_per_minute">TVDB / min</label>
+          <input class="form-control" id="metadata_tvdb_rate_limit_per_minute"
+                 name="metadata_tvdb_rate_limit_per_minute" type="number" min="1"
+                 value="{{ config.metadata.tvdb_rate_limit_per_minute }}">
+          <div class="form-text">Use your licensed TVDB tier as the ceiling.</div>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" for="metadata_omdb_enabled">OMDb</label>
+          <div class="form-switch-card">
+            <input class="form-check-input" id="metadata_omdb_enabled"
+                   name="metadata_omdb_enabled" type="checkbox"
+                   {% if config.metadata.omdb_enabled %}checked{% endif %}>
+            <label class="form-check-label" for="metadata_omdb_enabled">Enabled</label>
+          </div>
+        </div>
+        <div class="col-md-5">
+          <label class="form-label" for="metadata_omdb_api_key">OMDb API Key</label>
+          <input class="form-control" id="metadata_omdb_api_key"
+                 name="metadata_omdb_api_key" type="password"
+                 value="{{ config.metadata.omdb_api_key }}" autocomplete="off">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label" for="metadata_omdb_rate_limit_per_minute">OMDb / min</label>
+          <input class="form-control" id="metadata_omdb_rate_limit_per_minute"
+                 name="metadata_omdb_rate_limit_per_minute" type="number" min="1"
+                 value="{{ config.metadata.omdb_rate_limit_per_minute }}">
+          <div class="form-text">Adjust if your OMDb key allows higher throughput.</div>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" for="metadata_jellystat_enabled">Jellystat Signals</label>
+          <div class="form-switch-card">
+            <input class="form-check-input" id="metadata_jellystat_enabled"
+                   name="metadata_jellystat_enabled" type="checkbox"
+                   {% if config.metadata.jellystat_enabled %}checked{% endif %}>
+            <label class="form-check-label" for="metadata_jellystat_enabled">Enabled</label>
+          </div>
+        </div>
+        <div class="col-md-5">
+          <label class="form-label" for="metadata_jellystat_url">Jellystat URL</label>
+          <input class="form-control" id="metadata_jellystat_url"
+                 name="metadata_jellystat_url"
+                 value="{{ config.metadata.jellystat_url }}" placeholder="http://jellystat:3000">
+          <div class="form-text">Uses Jellystat Swagger stats endpoints with x-api-token.</div>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label" for="metadata_jellystat_api_token">Jellystat API Token</label>
+          <input class="form-control" id="metadata_jellystat_api_token"
+                 name="metadata_jellystat_api_token" type="password"
+                 value="{{ config.metadata.jellystat_api_token }}" autocomplete="off">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label" for="metadata_jellystat_days">Jellystat Days</label>
+          <input class="form-control" id="metadata_jellystat_days"
+                 name="metadata_jellystat_days" type="number" min="1"
+                 value="{{ config.metadata.jellystat_days }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label" for="metadata_jellystat_activity_weight">Activity Weight</label>
+          <input class="form-control" id="metadata_jellystat_activity_weight"
+                 name="metadata_jellystat_activity_weight" type="number" min="0" max="40"
+                 value="{{ config.metadata.jellystat_activity_weight }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label" for="metadata_jellystat_completion_weight">Completion Weight</label>
+          <input class="form-control" id="metadata_jellystat_completion_weight"
+                 name="metadata_jellystat_completion_weight" type="number" min="0" max="40"
+                 value="{{ config.metadata.jellystat_completion_weight }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label" for="metadata_jellystat_trend_weight">Trend Weight</label>
+          <input class="form-control" id="metadata_jellystat_trend_weight"
+                 name="metadata_jellystat_trend_weight" type="number" min="0" max="40"
+                 value="{{ config.metadata.jellystat_trend_weight }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label" for="metadata_jellystat_genre_trend_weight">Genre Trend Weight</label>
+          <input class="form-control" id="metadata_jellystat_genre_trend_weight"
+                 name="metadata_jellystat_genre_trend_weight" type="number" min="0" max="40"
+                 value="{{ config.metadata.jellystat_genre_trend_weight }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label" for="metadata_jellystat_underused_weight">Underused Weight</label>
+          <input class="form-control" id="metadata_jellystat_underused_weight"
+                 name="metadata_jellystat_underused_weight" type="number" min="0" max="40"
+                 value="{{ config.metadata.jellystat_underused_weight }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label" for="metadata_jellystat_stale_weight">Stale Weight</label>
+          <input class="form-control" id="metadata_jellystat_stale_weight"
+                 name="metadata_jellystat_stale_weight" type="number" min="0" max="40"
+                 value="{{ config.metadata.jellystat_stale_weight }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label" for="metadata_jellystat_rate_limit_per_minute">Jellystat / min</label>
+          <input class="form-control" id="metadata_jellystat_rate_limit_per_minute"
+                 name="metadata_jellystat_rate_limit_per_minute" type="number" min="1"
+                 value="{{ config.metadata.jellystat_rate_limit_per_minute }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label" for="metadata_cache_ttl_days">Cache TTL Days</label>
+          <input class="form-control" id="metadata_cache_ttl_days"
+                 name="metadata_cache_ttl_days" type="number" min="1"
+                 value="{{ config.metadata.cache_ttl_days }}">
+        </div>
+        <div class="col-md-auto">
+          <button class="btn btn-gold" type="submit">Save Metadata</button>
+        </div>
+        <div class="col-md-auto">
+          <button class="btn btn-outline-info" type="submit"
+                  formaction="/settings/jellystat/test" formmethod="post">
+            Test Jellystat
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+  {% if metadata_audit %}
+  <div class="card mb-3">
+    <div class="card-header">Metadata Coverage</div>
+    <div class="card-body">
+      <p class="text-secondary">{{ metadata_audit.total }} movie/series records found in the local media cache.</p>
+      <div class="table-responsive">
+        <table class="table table-hover align-middle">
+          <thead><tr><th>Type</th><th>Provider</th><th>Available</th><th>Missing</th><th>Coverage</th></tr></thead>
+          <tbody>
+            {% for media_type, data in metadata_audit.by_type.items() %}
+              {% for provider, stats in data.providers.items() %}
+              <tr>
+                <td>{{ media_type }}</td>
+                <td>{{ provider|upper }}</td>
+                <td>{{ stats.count }} / {{ data.total }}</td>
+                <td>{{ stats.missing }}</td>
+                <td>{{ stats.percent }}%</td>
+              </tr>
+              {% endfor %}
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+  <div class="row">
+    <div class="col-md-6">
+      <div class="card mb-3">
+        <div class="card-header">Jellyfin</div>
+        <div class="card-body">
+          <p><strong>URL:</strong> {{ config.jellyfin.url }}</p>
+          <p><strong>User ID:</strong> {{ config.jellyfin.user_id[:16] if config.jellyfin.user_id else "Not set" }}...</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="card mb-3">
+        <div class="card-header">Tunarr</div>
+        <div class="card-body">
+          <p><strong>URL:</strong> {{ config.tunarr.url }}</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="card mb-3">
+    <div class="card-header">Channels</div>
+    <div class="card-body">
+      <p>{{ config.channels|length }} channels configured</p>
+      <button class="btn btn-gold"
+              hx-post="/api/channels/sync"
+              hx-target="#sync-result"
+              hx-swap="innerHTML">
+        Sync Channels from Tunarr
+      </button>
+      <div id="sync-result" class="mt-2"></div>
+    </div>
+  </div>
+  <div class="card mb-3">
+    <div class="card-header">Media</div>
+    <div class="card-body">
+      <button class="btn btn-gold"
+              hx-post="/api/media/sync"
+              hx-target="#media-sync-result"
+              hx-swap="innerHTML">
+        Sync Media from Jellyfin
+      </button>
+      <div id="media-sync-result" class="mt-2"></div>
+    </div>
+  </div>
+</main>
+<template id="notification-rule-template">
+  <div class="notification-rule-row border rounded p-2">
+    <div class="row g-2 align-items-end">
+      <div class="col-md-3">
+        <label class="form-label">Event</label>
+        <select class="form-select" name="rule_event_type">
+          {% for event_type in notification_event_types %}
+          <option value="{{ event_type }}">{{ event_type }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Enabled</label>
+        <div class="form-switch-card">
+          <input class="form-check-input rule-enabled" type="checkbox" checked>
+          <span>Enabled</span>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Providers</label>
+        <div class="d-flex flex-wrap gap-2">
+          {% for provider in notification_providers %}
+          <label class="form-check-label">
+            <input class="form-check-input rule-provider" data-provider="{{ provider }}" type="checkbox">
+            {{ provider }}
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Throttle min</label>
+        <input class="form-control rule-throttle" type="number" min="0" value="30">
+      </div>
+      <div class="col-md-1">
+        <label class="form-label">Quiet from</label>
+        <input class="form-control rule-quiet-start" placeholder="22:00">
+      </div>
+      <div class="col-md-1">
+        <label class="form-label">Quiet to</label>
+        <input class="form-control rule-quiet-end" placeholder="07:00">
+      </div>
+      <div class="col-md-auto">
+        <button class="btn btn-outline-danger btn-sm remove-notification-rule" type="button">Remove</button>
+      </div>
+    </div>
+  </div>
+</template>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://unpkg.com/htmx.org@1.9.12"></script>
+<script>
+(() => {
+  const list = document.getElementById("notification-rule-list");
+  const template = document.getElementById("notification-rule-template");
+  const addButton = document.getElementById("add-notification-rule");
+
+  function reindexRules() {
+    if (!list) return;
+    list.querySelectorAll(".notification-rule-row").forEach((row, index) => {
+      const enabled = row.querySelector(".rule-enabled");
+      if (enabled) enabled.name = `rule_${index}_enabled`;
+      row.querySelectorAll(".rule-provider").forEach((input) => {
+        const provider = input.dataset.provider || input.name.split("_").pop();
+        input.name = `rule_${index}_${provider}`;
+      });
+      const throttle = row.querySelector(".rule-throttle");
+      if (throttle) throttle.name = `rule_${index}_throttle_minutes`;
+      const quietStart = row.querySelector(".rule-quiet-start");
+      if (quietStart) quietStart.name = `rule_${index}_quiet_start`;
+      const quietEnd = row.querySelector(".rule-quiet-end");
+      if (quietEnd) quietEnd.name = `rule_${index}_quiet_end`;
+    });
+  }
+
+  addButton?.addEventListener("click", () => {
+    const fragment = template.content.cloneNode(true);
+    list.appendChild(fragment);
+    reindexRules();
+  });
+  list?.addEventListener("click", (event) => {
+    const button = event.target.closest(".remove-notification-rule");
+    if (!button) return;
+    button.closest(".notification-rule-row")?.remove();
+    reindexRules();
+  });
+  reindexRules();
+})();
+</script>
+</body>
+</html>

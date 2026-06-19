@@ -1,0 +1,71 @@
+<div id="playlist-media-browser" data-page="{{ page }}" data-pages="{{ total_pages }}">
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <div class="small text-secondary">
+      {{ total }} library items | page {{ page }} of {{ total_pages }}
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-sm btn-outline-secondary page-button" type="button"
+              data-page="{{ page - 1 }}" {% if page <= 1 %}disabled{% endif %}>Previous</button>
+      <button class="btn btn-sm btn-outline-secondary page-button" type="button"
+              data-page="{{ page + 1 }}" {% if page >= total_pages %}disabled{% endif %}>Next</button>
+    </div>
+  </div>
+  {% if selected_rows %}
+  <div class="section-label mb-2">Selected</div>
+  <div class="table-responsive mb-3">
+    <table class="table table-hover align-middle">
+      <tbody>
+      {% for row in selected_rows %}
+        <tr data-key="{{ row.key }}" class="selected playlist-selected-row" draggable="true">
+          <td class="selection-cell">
+            <input class="form-check-input item-check" type="checkbox" checked>
+          </td>
+          <td><span class="type-badge type-{{ row.media_type }}">{{ row.media_type }}</span></td>
+          <td class="fw-semibold">{{ row.title }}</td>
+          <td class="text-secondary">{{ row.details }}</td>
+          <td class="text-end">
+            <button class="btn btn-sm btn-icon drag-handle" type="button" title="Drag to reorder" aria-label="Drag to reorder">&#9776;</button>
+            <button class="btn btn-sm btn-icon move-up" type="button" title="Move up">&#8593;</button>
+            <button class="btn btn-sm btn-icon move-down" type="button" title="Move down">&#8595;</button>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  <div class="section-label mb-2">Library</div>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle">
+      <thead><tr><th>Use</th><th>Type</th><th>Title</th><th>Details</th><th></th></tr></thead>
+      <tbody>
+      {% for row in rows %}
+        <tr data-key="{{ row.key }}">
+          <td class="selection-cell">
+            <input class="form-check-input item-check" type="checkbox">
+          </td>
+          <td><span class="type-badge type-{{ row.media_type }}">{{ row.media_type }}</span></td>
+          <td class="fw-semibold">{{ row.title }}</td>
+          <td class="text-secondary">{{ row.details }}</td>
+          <td></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="5" class="empty-state">No matching media.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-3">
+    <div class="small text-secondary">
+      {{ total }} library items | page {{ page }} of {{ total_pages }}
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-sm btn-outline-secondary page-button" type="button"
+              data-page="{{ page - 1 }}" {% if page <= 1 %}disabled{% endif %}>Previous</button>
+      <button class="btn btn-sm btn-outline-secondary page-button" type="button"
+              data-page="{{ page + 1 }}" {% if page >= total_pages %}disabled{% endif %}>Next</button>
+    </div>
+  </div>
+</div>

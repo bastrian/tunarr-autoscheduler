@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Recommendation Profiles - Tunarr AutoScheduler</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="/static/app.css" rel="stylesheet">
+</head>
+<body>
+{% set active_page = "recommendations" %}
+{% include "_nav.html" %}
+<main class="container">
+  <div class="page-header">
+    <div>
+      <h1>Recommendation Profiles</h1>
+      <div class="text-secondary">Built-ins stay read-only. Custom profiles can be tuned for your channels.</div>
+    </div>
+    <div class="action-bar">
+      <a class="btn btn-outline-secondary" href="/recommendations">Back to Recommendations</a>
+      <a class="btn btn-gold" href="/recommendations/profiles/new">New Profile</a>
+    </div>
+  </div>
+  {% if saved %}<div class="alert alert-success">Profile saved.</div>{% endif %}
+  {% if deleted %}<div class="alert alert-success">Profile deleted.</div>{% endif %}
+  {% if error %}<div class="alert alert-warning">{{ error }}</div>{% endif %}
+
+  <h2 class="h5 mb-3">Custom Profiles</h2>
+  <div class="table-responsive mb-4">
+    <table class="table table-hover align-middle">
+      <thead><tr><th>Name</th><th>Types</th><th>Rules</th><th>Description</th><th class="text-end">Actions</th></tr></thead>
+      <tbody>
+      {% for profile in custom_profiles %}
+        <tr>
+          <td><strong>{{ profile.name }}</strong><div class="small text-secondary">{{ profile.id }}</div></td>
+          <td>{{ profile.media_types|join(", ") }}</td>
+          <td>
+            <div class="small">Language: {{ profile.language_rule }}</div>
+            <div class="small">Runtime: {{ profile.min_runtime_minutes or "-" }} - {{ profile.max_runtime_minutes or "-" }}m</div>
+            <div class="small">Min items: {{ profile.min_items }}</div>
+          </td>
+          <td class="text-secondary">{{ profile.description }}</td>
+          <td class="text-end">
+            <a class="btn btn-sm btn-outline-light" href="/recommendations/profiles/{{ profile.id }}/edit">Edit</a>
+            <form class="d-inline" method="post" action="/recommendations/profiles/{{ profile.id }}/delete">
+              <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
+            </form>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="5" class="empty-state">No custom profiles yet.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <h2 class="h5 mb-3">Built-In Profiles</h2>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle">
+      <thead><tr><th>Name</th><th>Types</th><th>Rules</th><th>Description</th></tr></thead>
+      <tbody>
+      {% for profile in built_in_profiles %}
+        <tr>
+          <td><strong>{{ profile.name }}</strong><div class="small text-secondary">{{ profile.id }}</div></td>
+          <td>{{ profile.media_types|join(", ") }}</td>
+          <td>
+            <div class="small">Language: {{ profile.language_rule }}</div>
+            <div class="small">Runtime: {{ profile.min_runtime_minutes or "-" }} - {{ profile.max_runtime_minutes or "-" }}m</div>
+            <div class="small">Min items: {{ profile.min_items }}</div>
+          </td>
+          <td class="text-secondary">{{ profile.description }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</main>
+</body>
+</html>

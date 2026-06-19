@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Recommendation Explain - Tunarr AutoScheduler</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="/static/app.css" rel="stylesheet">
+</head>
+<body>
+{% set active_page = "recommendations" %}
+{% include "_nav.html" %}
+<main class="container pb-4">
+  <div class="page-header d-flex justify-content-between align-items-center gap-3">
+    <div>
+      <h1>Explain Recommendation</h1>
+      <div class="text-secondary">Inspect how one media item scores against a profile.</div>
+    </div>
+    <a class="btn btn-outline-secondary" href="/recommendations">Back to Recommendations</a>
+  </div>
+
+  {% if error %}<div class="alert alert-warning">{{ error }}</div>{% endif %}
+
+  <form class="filter-panel mb-3" method="get" action="/recommendations/explain">
+    <div class="row g-3 align-items-end">
+      <div class="col-md-4">
+        <label class="form-label" for="profile">Profile</label>
+        <select class="form-select" id="profile" name="profile">
+          {% for profile in profiles %}
+          <option value="{{ profile.id }}" {% if profile_id == profile.id %}selected{% endif %}>{{ profile.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label" for="item_id">Media / Provider ID</label>
+        <input class="form-control" id="item_id" name="item_id" value="{{ item_id }}" placeholder="Jellyfin media id, series id, IMDb/TMDB/TVDB id">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="language_rule">Language Rule</label>
+        <select class="form-select" id="language_rule" name="language_rule">
+          {% for value, label in language_rules.items() %}
+          <option value="{{ value }}" {% if language_rule == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-1 d-grid">
+        <button class="btn btn-gold" type="submit">Run</button>
+      </div>
+    </div>
+  </form>
+
+  {% if result %}
+  <div class="card recommendation-explain-card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span>{{ result.title }}</span>
+      <span class="badge text-bg-{{ 'success' if result.accepted else 'danger' }}">
+        {{ "Accepted" if result.accepted else "Excluded" }}
+      </span>
+    </div>
+    <div class="card-body">
+      <div class="health-summary-grid mb-3">
+        <div>
+          <span class="text-secondary">Score</span>
+          <strong class="d-block h3">{{ result.score }}</strong>
+        </div>
+        <div>
+          <span class="text-secondary">Type</span>
+          <strong class="d-block">{{ result.media_type }}</strong>
+        </div>
+        <div>
+          <span class="text-secondary">Items</span>
+          <strong class="d-block">{{ result.item_count }}</strong>
+        </div>
+        <div>
+          <span class="text-secondary">Runtime</span>
+          <strong class="d-block">{{ result.average_runtime_minutes or "unknown" }}{% if result.average_runtime_minutes %}m{% endif %}</strong>
+        </div>
+      </div>
+      <div class="row g-3">
+        <div class="col-md-4">
+          <h2 class="h6">Reasons</h2>
+          <ul>{% for reason in result.reasons %}<li>{{ reason }}</li>{% else %}<li class="text-secondary">No positive reasons.</li>{% endfor %}</ul>
+        </div>
+        <div class="col-md-4">
+          <h2 class="h6">Warnings</h2>
+          <ul>{% for warning in result.warnings %}<li>{{ warning }}</li>{% else %}<li class="text-secondary">No warnings.</li>{% endfor %}</ul>
+        </div>
+        <div class="col-md-4">
+          <h2 class="h6">Exclusions</h2>
+          <ul>{% for exclusion in result.exclusions %}<li>{{ exclusion }}</li>{% else %}<li class="text-secondary">No exclusions.</li>{% endfor %}</ul>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</main>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

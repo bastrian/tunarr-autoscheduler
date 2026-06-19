@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Channel Health - Tunarr AutoScheduler</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="/static/app.css" rel="stylesheet">
+</head>
+<body>
+{% set active_page = "health" %}
+{% include "_nav.html" %}
+<main class="container pb-4">
+  <div class="page-header d-flex justify-content-between align-items-center gap-3">
+    <h1>Channel Health</h1>
+    <div class="action-bar">
+      <form method="post" action="/diagnostics/bundle">
+        <button class="btn btn-outline-info" type="submit">Download Diagnostic Bundle</button>
+      </form>
+      <a class="btn btn-outline-secondary" href="/">Back to Dashboard</a>
+    </div>
+  </div>
+
+  <div class="health-summary-grid mb-3">
+    {% for key, ok in connectivity.items() %}
+    <div class="card">
+      <div class="card-body">
+        <span class="text-secondary">{{ key|capitalize }}</span>
+        <strong class="d-block mt-1">
+          <span class="badge text-bg-{{ 'success' if ok else 'danger' }}">
+            {{ "Connected" if ok else "Problem" }}
+          </span>
+        </strong>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="card">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0 channel-health-table">
+        <thead>
+          <tr>
+            <th>Channel</th>
+            <th>Schedule</th>
+            <th>Follow-up</th>
+            <th>Health</th>
+            <th>Latest Upload</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for row in rows %}
+          {% set channel = row.channel %}
+          {% set status = row.status %}
+          {% set health = row.health %}
+          {% set upload = status.latest_upload %}
+          <tr>
+            <td>
+              <strong>{{ channel.name or channel.id }}</strong>
+              <div class="small text-secondary">{{ channel.channel_profile }}</div>
+              {% if row.active_job %}
+              <span class="badge badge-running">Generating</span>
+              <span class="small text-secondary">{{ row.active_job.current_stage }}</span>
+              {% elif channel.scheduling_enabled %}
+              <span class="badge badge-enabled">Enabled</span>
+              {% else %}
+              <span class="badge badge-disabled">Disabled</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if status.uploaded_version %}
+              <strong>v{{ status.uploaded_version }}</strong>
+              <div class="small text-secondary">
+                Ends {{ status.planned_end|local_datetime(timezone) }}
+              </div>
+              {% if status.expiring %}
+              <span class="badge badge-warning">Expiring</span>
+              {% endif %}
+              {% else %}
+              <span class="text-secondary">No uploaded schedule</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if status.has_follow_up %}
+              <span class="badge text-bg-success">Ready</span>
+              {% elif status.expiring %}
+              <span class="badge text-bg-warning">Missing</span>
+              {% else %}
+              <span class="badge text-bg-secondary">Open</span>
+              {% endif %}
+              <div class="small text-secondary mt-1">
+                Auto:
+                {% if channel.automatic_follow_up.enabled %}
+                  on{% if channel.automatic_follow_up.auto_upload %}, upload{% elif channel.automatic_follow_up.auto_approve %}, approve{% endif %}
+                {% else %}
+                  off
+                {% endif %}
+              </div>
+              {% if status.invalid_count %}
+              <div class="small text-warning">{{ status.invalid_count }} invalid draft(s)</div>
+              {% endif %}
+            </td>
+            <td>
+              {% if health %}
+              <span class="badge text-bg-{{ 'success' if health.level == 'success' else ('warning' if health.level == 'warning' else 'danger') }}">
+                {{ health.summary }}
+              </span>
+              <div class="small text-secondary mt-1">
+                {% for metric in health.metrics %}
+                  {{ metric.label }} {{ metric.value }}{% if not loop.last %} · {% endif %}
+                {% endfor %}
+              </div>
+              {% else %}
+              <span class="text-secondary">No health data</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if upload %}
+              <span class="badge text-bg-{{ 'success' if upload.status == 'success' else 'danger' }}">
+                {{ upload.status }}
+              </span>
+              <div class="small text-secondary">
+                v{{ upload.schedule_version }} · {{ upload.created_at|local_datetime(timezone) }}
+              </div>
+              {% else %}
+              <span class="text-secondary">No upload attempt</span>
+              {% endif %}
+            </td>
+            <td>
+              <div class="action-bar compact-actions">
+                <a class="btn btn-sm btn-gold" href="/channels/{{ channel.id }}">Open</a>
+                <a class="btn btn-sm btn-outline-info" href="/channels/{{ channel.id }}#schedule-health">Health</a>
+                <a class="btn btn-sm btn-outline-info" href="/schedules/{{ channel.id }}">History</a>
+                {% if status.uploaded_version %}
+                <a class="btn btn-sm btn-outline-info" href="/schedules/{{ channel.id }}/preview/{{ status.uploaded_version }}">Preview</a>
+                {% endif %}
+                <a class="btn btn-sm btn-outline-secondary" href="/uploads?channel_id={{ channel.id }}">Uploads</a>
+                <a class="btn btn-sm btn-outline-light" href="/channels/{{ channel.id }}/config?return_to=/channel-health">Config</a>
+              </div>
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="6" class="text-secondary">No channels configured.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

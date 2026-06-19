@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Setup - Tunarr AutoScheduler</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="/static/app.css" rel="stylesheet">
+</head>
+<body>
+<main class="setup-panel">
+  <h1 class="h3 mb-3">Initial Setup</h1>
+  {% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+  <form method="post" action="/setup">
+    <div class="card mb-3">
+      <div class="card-header">Admin</div>
+      <div class="card-body">
+        <label class="form-label" for="admin_username">Username</label>
+        <input class="form-control mb-2" id="admin_username" name="admin_username"
+               value="{{ values.admin_username or 'admin' }}" required>
+        <label class="form-label" for="admin_password">Password</label>
+        <input class="form-control" id="admin_password" name="admin_password" type="password" minlength="8" required>
+      </div>
+    </div>
+    <div class="card mb-3">
+      <div class="card-header">Jellyfin</div>
+      <div class="card-body">
+        <label class="form-label" for="jellyfin_url">URL</label>
+        <input class="form-control mb-2" id="jellyfin_url" name="jellyfin_url" value="{{ values.jellyfin_url or 'http://jellyfin:8096' }}" required>
+        <label class="form-label" for="jellyfin_api_key">API Key</label>
+        <input class="form-control mb-2" id="jellyfin_api_key" name="jellyfin_api_key" value="{{ values.jellyfin_api_key or '' }}" required>
+        <label class="form-label" for="jellyfin_user_id">User ID</label>
+        <input class="form-control" id="jellyfin_user_id" name="jellyfin_user_id" value="{{ values.jellyfin_user_id or '' }}" required>
+      </div>
+    </div>
+    <div class="card mb-3">
+      <div class="card-header">Tunarr</div>
+      <div class="card-body">
+        <label class="form-label" for="tunarr_url">URL</label>
+        <input class="form-control" id="tunarr_url" name="tunarr_url" value="{{ values.tunarr_url or 'http://tunarr:8000' }}" required>
+      </div>
+    </div>
+    <div class="card mb-3">
+      <div class="card-header">Application</div>
+      <div class="card-body">
+        <label class="form-label" for="timezone">Timezone</label>
+        <input class="form-control" id="timezone" name="timezone"
+               value="{{ values.timezone or 'Europe/Berlin' }}" list="timezone-options" required>
+        <datalist id="timezone-options">
+          <option value="Europe/Berlin">
+          <option value="UTC">
+          <option value="Europe/London">
+          <option value="America/New_York">
+          <option value="America/Los_Angeles">
+        </datalist>
+      </div>
+    </div>
+    <button class="btn btn-gold" type="submit">Test and Save</button>
+  </form>
+</main>
+</body>
+</html>

@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FlixWolf EPG</title>
+{% if standalone_export and inline_css %}
+<style>{{ inline_css|safe }}</style>
+{% else %}
+<link href="/static/app.css" rel="stylesheet">
+{% endif %}
+</head>
+<body class="public-epg-page">
+<main class="epg-shell">
+  <header class="epg-header">
+    <div>
+      <div class="epg-kicker">Public guide</div>
+      <h1>FlixWolf EPG</h1>
+      <p class="epg-range">
+        {{ window_start.strftime("%a, %d.%m.%Y %H:%M") }}
+        to
+        {{ window_end.strftime("%a, %d.%m.%Y %H:%M") }}
+      </p>
+    </div>
+    <div class="epg-clock">
+      <span id="epg-live-clock" data-timezone="{{ timezone }}">{{ now.strftime("%H:%M") }}</span>
+      <small>{{ timezone }}</small>
+    </div>
+  </header>
+
+  <nav class="epg-control-panel" aria-label="EPG navigation">
+    <div class="epg-view-toggle">
+      <a class="{% if view == 'day' %}active{% endif %}" href="{{ epg_path }}?view=day&period={{ period }}&date={{ selected_date.isoformat() }}{% if selected_channel %}&channel={{ selected_channel }}{% endif %}">Day</a>
+      <a class="{% if view == 'week' %}active{% endif %}" href="{{ epg_path }}?view=week&period=day&date={{ selected_date.isoformat() }}{% if selected_channel %}&channel={{ selected_channel }}{% endif %}">Week</a>
+    </div>
+
+    <div class="epg-period-strip" aria-label="Time window">
+      {% for option in period_options %}
+      <a class="{% if period == option.id %}active{% endif %}" href="{{ epg_path }}?view={{ view }}&period={{ option.id }}&date={{ selected_date.isoformat() }}{% if selected_channel %}&channel={{ selected_channel }}{% endif %}">
+        {{ option.label }}
+      </a>
+      {% endfor %}
+    </div>
+
+    <form class="epg-channel-filter" method="get" action="{{ epg_path }}">
+      <input type="hidden" name="view" value="{{ view }}">
+      <input type="hidden" name="period" value="{{ period }}">
+      <input type="hidden" name="date" value="{{ selected_date.isoformat() }}">
+      <label for="epg-channel">Channel</label>
+      <select id="epg-channel" name="channel" onchange="this.form.submit()">
+        <option value="">All channels</option>
+        {% for option in channel_options %}
+        <option value="{{ option.id }}" {% if selected_channel == option.id %}selected{% endif %}>{{ option.name }}</option>
+        {% endfor %}
+      </select>
+    </form>
+
+    <div class="epg-pager">
+      <a href="{{ epg_path }}?view={{ view }}&period={{ period }}&date={{ previous_date.isoformat() }}{% if selected_channel %}&channel={{ selected_channel }}{% endif %}" aria-label="Previous {{ view }}">&lsaquo;</a>
+      <a href="{{ epg_path }}?view={{ view }}&period={{ period }}{% if selected_channel %}&channel={{ selected_channel }}{% endif %}" aria-label="Today">Today</a>
+      <a href="{{ epg_path }}?view={{ view }}&period={{ period }}&date={{ next_date.isoformat() }}{% if selected_channel %}&channel={{ selected_channel }}{% endif %}" aria-label="Next {{ view }}">&rsaquo;</a>
+    </div>
+
+    <div class="epg-export-links" aria-label="Public exports">
+      <a href="/public/epg.json?view={{ view }}&period={{ period }}&date={{ selected_date.isoformat() }}{% if selected_channel %}&channel={{ selected_channel }}{% endif %}">JSON</a>
+      <a href="/public/epg.xml?view={{ view }}&period={{ period }}&date={{ selected_date.isoformat() }}{% if selected_channel %}&channel={{ selected_channel }}{% endif %}">XMLTV</a>
+      <a href="/public/epg/export?view={{ view }}&period={{ period }}&date={{ selected_date.isoformat() }}{% if selected_channel %}&channel={{ selected_channel }}{% endif %}">Standalone</a>
+    </div>
+  </nav>
+
+  {% if not channels %}
+  <section class="epg-empty">
+    <h2>No public schedule available</h2>
+    <p>No uploaded, approved, or draft schedule could be found for this selection.</p>
+  </section>
+  {% endif %}
+
+  {% if channels %}
+  <section class="epg-now-strip" aria-label="Current programs">
+    {% for channel in channels %}
+    {% set current = channel.current %}
+    <article class="epg-now-tile {% if current %}is-live{% else %}is-idle{% endif %}">
+      <div class="epg-now-tile-head">
+        <h2>
+          {% if channel.logo_url %}<img src="{{ channel.logo_url }}" alt="" loading="lazy">{% endif %}
+          <span>{{ channel.name }}</span>
+        </h2>
+        {% if current %}<span>Now</span>{% else %}<span>Next</span>{% endif %}
+      </div>
+      {% if current %}
+      <div class="epg-now-tile-body">
+        {% if current.image_url %}
+        <div class="epg-now-thumb" style="background-image: url('{{ current.image_url }}')"></div>
+        {% else %}
+        <div class="epg-now-thumb epg-art-empty">{{ current.kind[:1] }}</div>
+        {% endif %}
+        <div class="epg-now-details">
+          <div class="epg-time">{{ current.time }}</div>
+          <h3>{{ current.title }}</h3>
+          {% if current.subtitle %}<p>{{ current.subtitle }}</p>{% endif %}
+          <div class="epg-progress" data-start="{{ current.start.isoformat() }}" data-end="{{ current.end.isoformat() }}">
+            <span style="width: {{ current.progress_percent }}%"></span>
+          </div>
+          {% if channel.next %}
+          <small>Up next {{ channel.next.time }} / {{ channel.next.title }}</small>
+          {% else %}
+          <small>Ends {{ current.ends_label }}</small>
+          {% endif %}
+        </div>
+      </div>
+      {% elif channel.next %}
+      <div class="epg-now-empty">
+        <strong>{{ channel.next.time }}</strong>
+        <span>{{ channel.next.title }}</span>
+        {% if channel.next.subtitle %}<small>{{ channel.next.subtitle }}</small>{% endif %}
+      </div>
+      {% else %}
+      <div class="epg-now-empty">
+        {% if channel.has_schedule %}
+        <span>No entries in this window.</span>
+        {% else %}
+        <span>No public schedule uploaded yet.</span>
+        {% endif %}
+      </div>
+      {% endif %}
+    </article>
+    {% endfor %}
+  </section>
+
+  <section class="epg-section epg-timeline" data-view="{{ view }}">
+    <div class="epg-section-head">
+      <div>
+        <span class="epg-kicker">Program board</span>
+        <h2>Programm nach Sendern</h2>
+      </div>
+      {% if now >= window_start and now <= window_end %}
+      <div class="epg-now-tick" data-window-start="{{ window_start.isoformat() }}"
+           data-window-end="{{ window_end.isoformat() }}">
+        <span>Now</span>
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="epg-time-ruler" aria-hidden="true">
+      {% for mark in time_marks %}
+      <span>{{ mark.label }}</span>
+      {% endfor %}
+    </div>
+
+    <div class="epg-channel-board">
+      {% for channel in channels %}
+      <article class="epg-channel-column">
+        <header>
+          <div>
+            <h3>
+              {% if channel.logo_url %}<img src="{{ channel.logo_url }}" alt="" loading="lazy">{% endif %}
+              <span>{{ channel.name }}</span>
+            </h3>
+          </div>
+          {% if channel.current %}<span>Live</span>{% endif %}
+        </header>
+        <ol class="epg-program-list">
+          {% for item in channel.programs %}
+          <li>
+            <article class="epg-program epg-type-{{ item.type }} {% if item.is_current %}is-current{% endif %}">
+              {% if item.image_url %}
+              <div class="epg-art" style="background-image: url('{{ item.image_url }}')"></div>
+              {% else %}
+              <div class="epg-art epg-art-empty">{{ item.kind[:1] }}</div>
+              {% endif %}
+              <div class="epg-program-body">
+                <div class="epg-program-topline">
+                  <span class="epg-time">{{ item.time }}</span>
+                  <span class="epg-program-duration">{{ item.runtime_label }}</span>
+                  <span class="epg-kind">{{ item.kind }}</span>
+                </div>
+                <h4>{{ item.title }}</h4>
+                {% if item.subtitle %}<p>{{ item.subtitle }}</p>{% endif %}
+                {% if item.overview %}<p class="epg-description">{{ item.overview }}</p>{% endif %}
+                {% if item.year or item.genres %}
+                <div class="epg-program-meta">
+                  {% if item.year %}<span>{{ item.year }}</span>{% endif %}
+                  {% if item.genres %}<span>{{ item.genres }}</span>{% endif %}
+                </div>
+                {% endif %}
+                {% if item.metadata_links %}
+                <div class="epg-program-links">
+                  {% for link in item.metadata_links %}
+                  <a href="{{ link.url }}" target="_blank" rel="noopener noreferrer">{{ link.label }}</a>
+                  {% endfor %}
+                </div>
+                {% endif %}
+              </div>
+            </article>
+          </li>
+          {% else %}
+          <li class="epg-no-items">
+            {% if channel.has_schedule %}
+            No entries in this {{ view }}.
+            {% else %}
+            No public schedule uploaded for this channel yet.
+            {% endif %}
+          </li>
+          {% endfor %}
+        </ol>
+      </article>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+</main>
+<script>
+(() => {
+  const clock = document.getElementById("epg-live-clock");
+  const timeZone = clock ? clock.dataset.timezone : "UTC";
+  const progressBars = Array.from(document.querySelectorAll(".epg-progress"));
+  const ticks = Array.from(document.querySelectorAll(".epg-now-tick"));
+
+  function updateClock() {
+    if (!clock) return;
+    clock.textContent = new Intl.DateTimeFormat("de-DE", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+      timeZone,
+    }).format(new Date());
+  }
+
+  function updateProgress() {
+    const now = Date.now();
+    progressBars.forEach((bar) => {
+      const start = Date.parse(bar.dataset.start || "");
+      const end = Date.parse(bar.dataset.end || "");
+      const fill = bar.querySelector("span");
+      if (!fill || !Number.isFinite(start) || !Number.isFinite(end) || end <= start) return;
+      const position = Math.max(0, Math.min(100, ((now - start) / (end - start)) * 100));
+      fill.style.width = `${position}%`;
+    });
+    ticks.forEach((tick) => {
+      const start = Date.parse(tick.dataset.windowStart || "");
+      const end = Date.parse(tick.dataset.windowEnd || "");
+      if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return;
+      const inWindow = now >= start && now <= end;
+      tick.hidden = !inWindow;
+    });
+  }
+
+  updateClock();
+  updateProgress();
+  window.setInterval(() => {
+    updateClock();
+    updateProgress();
+  }, 30000);
+})();
+</script>
+</body>
+</html>

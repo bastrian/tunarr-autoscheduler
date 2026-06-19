@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ "Edit" if playlist else "New" }} Playlist - Tunarr AutoScheduler</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="/static/app.css" rel="stylesheet">
+</head>
+<body>
+{% set active_page = "playlists" %}
+{% include "_nav.html" %}
+<main class="container pb-4">
+  <div class="page-header">
+    <div>
+      <h1 class="mb-1">{{ "Edit Playlist" if playlist else "New Playlist" }}</h1>
+      <div class="text-secondary">Build an ordered source from Jellyfin series and movies.</div>
+    </div>
+    <div class="action-bar">
+      <button class="btn btn-gold" type="submit" form="playlist-form">Save Playlist</button>
+      {% if playlist %}
+      <a class="btn btn-outline-info"
+         href="/recommendations?playlist_id={{ playlist.id }}&playlist_mode=append{% if playlist.channel_scope %}&channel_id={{ playlist.channel_scope }}{% endif %}">
+        Add Recommendations
+      </a>
+      <a class="btn btn-outline-info"
+         href="/recommendations/builder?preview=1&mode=daypart&profile=auto&themes={{ playlist.name|urlencode }}&seed={{ playlist.tags|join(', ')|urlencode }}{% if playlist.channel_scope %}&channel_id={{ playlist.channel_scope }}{% endif %}&channel_name={{ playlist.name|urlencode }}&per_theme_limit=25&balance_mode=tv_balanced">
+        Builder from Playlist
+      </a>
+      <a class="btn btn-outline-secondary"
+         href="/recommendations?playlist_id={{ playlist.id }}&playlist_mode=replace{% if playlist.channel_scope %}&channel_id={{ playlist.channel_scope }}{% endif %}">
+        Rebuild from Recommendations
+      </a>
+      {% else %}
+      <a class="btn btn-outline-info" href="/recommendations">Create from Recommendations</a>
+      <a class="btn btn-outline-secondary" href="/recommendations/builder">Open Builder</a>
+      {% endif %}
+      <a class="btn btn-outline-secondary" href="/playlists">Cancel</a>
+    </div>
+  </div>
+  {% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+  <form method="post" action="{{ '/playlists/' ~ playlist.id if playlist else '/playlists' }}" id="playlist-form">
+    <div class="card mb-3">
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-md-5">
+            <label class="form-label" for="name">Name</label>
+            <input class="form-control" id="name" name="name" required value="{{ playlist.name if playlist else '' }}">
+          </div>
+          <div class="col-md-7">
+            <label class="form-label" for="description">Description</label>
+            <input class="form-control" id="description" name="description" value="{{ playlist.description if playlist else '' }}">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label" for="category_id">Category</label>
+            <select class="form-select" id="category_id" name="category_id">
+              <option value="">No category</option>
+              {% for category in categories %}
+              <option value="{{ category.id }}" {% if playlist and playlist.category_id == category.id %}selected{% endif %}>{{ category.name }}</option>
+              {% endfor %}
+            </select>
+            <div class="form-text"><a href="/playlist-categories">Manage categories</a></div>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label" for="channel_scope">Channel scope</label>
+            <select class="form-select" id="channel_scope" name="channel_scope">
+              <option value="">Global</option>
+              {% for channel in channels %}
+              <option value="{{ channel.id }}" {% if playlist and playlist.channel_scope == channel.id %}selected{% endif %}>{{ channel.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label" for="tags">Tags</label>
+            <input class="form-control" id="tags" name="tags"
+                   list="playlist-tags"
+                   placeholder="crime, morning, documentary"
+                   value="{{ playlist.tags|join(', ') if playlist else '' }}">
+            <datalist id="playlist-tags">
+              {% for tag in tags %}
+              <option value="{{ tag }}">
+              {% endfor %}
+            </datalist>
+          </div>
+        </div>
+      </div>
+    </div>
+    <input type="hidden" name="item_order" id="item-order" value="{{ selected_keys|join('\n') }}">
+
+    <div class="filter-panel mb-3">
+      <div class="row g-3 align-items-end">
+        <div class="col-md-7">
+          <label class="form-label" for="media-search">Search library</label>
+          <input class="form-control" id="media-search" type="search" placeholder="Search series and movies">
+        </div>
+        <div class="col-md-5">
+          <label class="form-label" for="media-type">Media type</label>
+          <select class="form-select" id="media-type">
+            <option value="all">All media</option>
+            <option value="series">Series</option>
+            <option value="movie">Movies</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <div class="card-body" id="media-browser">
+        <div class="text-secondary">Loading media...</div>
+      </div>
+    </div>
+
+    <div class="d-flex gap-2">
+      <button class="btn btn-gold" type="submit">Save Playlist</button>
+      <a class="btn btn-outline-secondary" href="/playlists">Cancel</a>
+    </div>
+  </form>
+</main>
+<script>
+  const browser = document.getElementById("media-browser");
+  const search = document.getElementById("media-search");
+  const mediaType = document.getElementById("media-type");
+  const itemOrder = document.getElementById("item-order");
+  let selectedKeys = itemOrder.value.split("\n").filter(Boolean);
+  let searchTimer;
+  let draggedKey = "";
+
+  async function loadMedia(page = 1) {
+    const params = new URLSearchParams({
+      q: search.value,
+      media_type: mediaType.value,
+      page: String(page),
+      selected: selectedKeys.join("\n"),
+    });
+    browser.setAttribute("aria-busy", "true");
+    try {
+      const response = await fetch(`/playlists/media-options?${params}`);
+      if (!response.ok) throw new Error(`Request failed (${response.status})`);
+      browser.innerHTML = await response.text();
+    } catch (error) {
+      browser.innerHTML = `<div class="alert alert-danger mb-0">Could not load media. ${error.message}</div>`;
+    } finally {
+      browser.removeAttribute("aria-busy");
+    }
+  }
+
+  function storeSelection() {
+    itemOrder.value = selectedKeys.join("\n");
+  }
+
+  browser.addEventListener("change", (event) => {
+    if (!event.target.classList.contains("item-check")) return;
+    const key = event.target.closest("tr").dataset.key;
+    if (event.target.checked && !selectedKeys.includes(key)) selectedKeys.push(key);
+    if (!event.target.checked) selectedKeys = selectedKeys.filter((item) => item !== key);
+    storeSelection();
+    loadMedia(1);
+  });
+
+  browser.addEventListener("click", (event) => {
+    const pageButton = event.target.closest(".page-button");
+    if (pageButton && !pageButton.disabled) {
+      loadMedia(Number(pageButton.dataset.page));
+      return;
+    }
+    const row = event.target.closest("tr[data-key]");
+    if (!row) return;
+    const index = selectedKeys.indexOf(row.dataset.key);
+    if (index < 0) return;
+    if (event.target.closest(".move-up") && index > 0) {
+      [selectedKeys[index - 1], selectedKeys[index]] = [selectedKeys[index], selectedKeys[index - 1]];
+    }
+    if (event.target.closest(".move-down") && index < selectedKeys.length - 1) {
+      [selectedKeys[index], selectedKeys[index + 1]] = [selectedKeys[index + 1], selectedKeys[index]];
+    }
+    storeSelection();
+    loadMedia(1);
+  });
+
+  browser.addEventListener("dragstart", (event) => {
+    const row = event.target.closest(".playlist-selected-row");
+    if (!row) return;
+    draggedKey = row.dataset.key;
+    row.classList.add("dragging");
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", draggedKey);
+  });
+
+  browser.addEventListener("dragend", (event) => {
+    const row = event.target.closest(".playlist-selected-row");
+    row?.classList.remove("dragging");
+    draggedKey = "";
+  });
+
+  browser.addEventListener("dragover", (event) => {
+    const row = event.target.closest(".playlist-selected-row");
+    if (!row || !draggedKey || row.dataset.key === draggedKey) return;
+    event.preventDefault();
+    row.classList.add("drag-over");
+  });
+
+  browser.addEventListener("dragleave", (event) => {
+    event.target.closest(".playlist-selected-row")?.classList.remove("drag-over");
+  });
+
+  browser.addEventListener("drop", (event) => {
+    const row = event.target.closest(".playlist-selected-row");
+    if (!row || !draggedKey || row.dataset.key === draggedKey) return;
+    event.preventDefault();
+    row.classList.remove("drag-over");
+    const from = selectedKeys.indexOf(draggedKey);
+    const to = selectedKeys.indexOf(row.dataset.key);
+    if (from < 0 || to < 0) return;
+    const [item] = selectedKeys.splice(from, 1);
+    selectedKeys.splice(to, 0, item);
+    storeSelection();
+    loadMedia(1);
+  });
+
+  search.addEventListener("input", () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => loadMedia(1), 250);
+  });
+  mediaType.addEventListener("change", () => loadMedia(1));
+  loadMedia();
+</script>
+</body>
+</html>

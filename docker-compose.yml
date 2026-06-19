@@ -1,0 +1,45 @@
+services:
+  scheduler:
+    build:
+      context: .
+      target: runtime
+    image: tunarr-autoscheduler:latest
+    container_name: tunarr-autoscheduler
+    volumes:
+      - "${HOME}/.tunarr:/root/.tunarr"
+    environment:
+      - JELLYFIN_API_KEY=${JELLYFIN_API_KEY:-}
+      - JELLYFIN_USER_ID=${JELLYFIN_USER_ID:-}
+    expose:
+      - "8000"
+    networks:
+      - scheduler_network
+    deploy:
+      placement:
+        constraints:
+          - node.role == ${SCHEDULER_NODE_ROLE:-manager}
+      labels:
+        - traefik.enable=true
+        - traefik.swarm.network=${SCHEDULER_NETWORK:-flixwolf_media}
+        - traefik.http.routers.scheduler.rule=Host(`${SCHEDULER_HOST:-scheduler.example.com}`)
+        - traefik.http.routers.scheduler.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}
+        - traefik.http.routers.scheduler.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
+        - traefik.http.routers.scheduler.middlewares=${TRAEFIK_MIDDLEWARES:-security-headers@file}
+        - traefik.http.services.scheduler.loadbalancer.server.port=8000
+      restart_policy:
+        condition: any
+    restart: unless-stopped
+
+  scheduler-test:
+    profiles:
+      - test
+    build:
+      context: .
+      target: test
+    image: tunarr-autoscheduler:test
+    command: ["python", "-m", "pytest", "tests/"]
+
+networks:
+  scheduler_network:
+    name: ${SCHEDULER_NETWORK:-flixwolf_media}
+    external: true

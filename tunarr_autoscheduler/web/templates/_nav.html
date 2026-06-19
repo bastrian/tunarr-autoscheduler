@@ -1,0 +1,15 @@
+<nav class="navbar app-navbar mb-4">
+  <div class="container">
+    <a class="navbar-brand" href="/">Tunarr AutoScheduler</a>
+    <div class="navbar-nav">
+      <a class="nav-link {% if active_page == 'dashboard' %}active{% endif %}" href="/">Dashboard</a>
+      <a class="nav-link {% if active_page == 'playlists' %}active{% endif %}" href="/playlists">Playlists</a>
+      <a class="nav-link {% if active_page == 'recommendations' %}active{% endif %}" href="/recommendations">Recommendations</a>
+      <a class="nav-link {% if active_page == 'jobs' %}active{% endif %}" href="/jobs">Jobs</a>
+      <a class="nav-link {% if active_page == 'health' %}active{% endif %}" href="/channel-health">Health</a>
+      <a class="nav-link {% if active_page == 'uploads' %}active{% endif %}" href="/uploads">Uploads</a>
+      <a class="nav-link {% if active_page == 'notifications' %}active{% endif %}" href="/notifications">Notifications</a>
+      <a class="nav-link {% if active_page == 'settings' %}active{% endif %}" href="/settings">Settings</a>
+    </div>
+  </div>
+</nav>
