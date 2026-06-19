@@ -20,7 +20,7 @@
             hx-post="/schedules/{{ channel.id }}/cleanup"
             hx-target="#notifications"
             hx-swap="innerHTML"
-            hx-confirm="Delete old non-uploaded schedule versions matching this cleanup policy?">
+            hx-confirm="Delete old schedule versions matching this cleanup policy?">
         <div class="col-md-2">
           <label class="form-label" for="keep_latest">Keep Latest</label>
           <input class="form-control" id="keep_latest" name="keep_latest" type="number" min="1" value="10">
@@ -28,15 +28,15 @@
         <div class="col-md-7">
           <label class="form-label">Cleanup Statuses</label>
           <div class="d-flex flex-wrap gap-3">
-            {% for status in ["draft", "approved", "invalid", "rejected"] %}
+            {% for status in ["draft", "approved", "invalid", "rejected", "uploaded"] %}
             <div class="form-check">
               <input class="form-check-input" id="cleanup_{{ status }}" name="cleanup_statuses"
-                     type="checkbox" value="{{ status }}" checked>
+                     type="checkbox" value="{{ status }}"{% if status != "uploaded" %} checked{% endif %}>
               <label class="form-check-label" for="cleanup_{{ status }}">{{ status }}</label>
             </div>
             {% endfor %}
           </div>
-          <div class="form-text">Uploaded versions are kept.</div>
+          <div class="form-text">Uploaded versions are only cleaned up when selected.</div>
         </div>
         <div class="col-md-3">
           <button class="btn btn-outline-danger w-100" type="submit">Cleanup Old Versions</button>
@@ -48,7 +48,7 @@
         hx-post="/schedules/{{ channel.id }}/bulk-delete"
         hx-target="#notifications"
         hx-swap="innerHTML"
-        hx-confirm="Delete selected non-uploaded schedule versions?">
+        hx-confirm="Delete selected schedule versions?">
     <div class="action-bar mb-3">
       <button class="btn btn-outline-danger" type="submit">Delete Selected</button>
       <a class="btn btn-outline-info" href="/schedules/{{ channel.id }}/diff">Compare Latest</a>

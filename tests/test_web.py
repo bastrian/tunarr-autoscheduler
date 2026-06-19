@@ -3576,7 +3576,8 @@ def test_upload_schedule_sends_approved_version_to_tunarr() -> None:
     assert core.state.versions[("ch1", 2)]["status"] == "uploaded"
     assert len(core.tunarr_client.uploads) == 1
     assert "Uploaded schedule version 2" in response.text
-    assert "upload-result" in response.text
+    assert '<div class="upload-result">' in response.text
+    assert "&lt;div class=&quot;upload-result&quot;&gt;" not in response.text
     assert "Persistent time" in response.text
     assert "not attempted" in response.text
     assert "Fallback used" in response.text
@@ -3698,15 +3699,15 @@ def test_delete_schedule_removes_non_uploaded_version() -> None:
     assert ("ch1", 1) not in core.state.versions
 
 
-def test_delete_uploaded_schedule_is_blocked() -> None:
+def test_delete_uploaded_schedule_removes_version() -> None:
     core = Core()
     client = make_client(core)
 
     response = client.delete("/schedules/ch1/3")
 
-    assert response.status_code == 409
-    assert ("ch1", 3) in core.state.versions
-    assert "Uploaded schedules cannot be deleted" in response.text
+    assert response.status_code == 200
+    assert ("ch1", 3) not in core.state.versions
+    assert "Deleted schedule version 3" in response.text
     assert 'id="schedule-table"' in response.text
 
 
@@ -3737,7 +3738,7 @@ def test_schedule_diff_compares_two_versions() -> None:
     assert "episode-1" in response.text
 
 
-def test_bulk_delete_removes_selected_non_uploaded_versions() -> None:
+def test_bulk_delete_removes_selected_versions_including_uploaded() -> None:
     core = Core()
     client = make_client(core)
 
@@ -3749,12 +3750,11 @@ def test_bulk_delete_removes_selected_non_uploaded_versions() -> None:
     assert response.status_code == 200
     assert ("ch1", 1) not in core.state.versions
     assert ("ch1", 2) not in core.state.versions
-    assert ("ch1", 3) in core.state.versions
-    assert "Deleted 2 schedule version(s)." in response.text
-    assert "Skipped uploaded versions: 3" in response.text
+    assert ("ch1", 3) not in core.state.versions
+    assert "Deleted 3 schedule version(s)." in response.text
 
 
-def test_cleanup_schedule_versions_keeps_latest_and_uploaded() -> None:
+def test_cleanup_schedule_versions_keeps_uploaded_unless_selected() -> None:
     core = Core()
     for version in range(4, 9):
         core.state.versions[("ch1", version)] = {
@@ -3779,6 +3779,34 @@ def test_cleanup_schedule_versions_keeps_latest_and_uploaded() -> None:
     assert ("ch1", 7) in core.state.versions
     assert ("ch1", 6) not in core.state.versions
     assert ("ch1", 3) in core.state.versions
+    assert "Cleanup deleted" in response.text
+
+
+def test_cleanup_schedule_versions_can_delete_uploaded_when_selected() -> None:
+    core = Core()
+    for version in range(4, 9):
+        core.state.versions[("ch1", version)] = {
+            **core.state.versions[("ch1", 3)],
+            "id": f"version-{version}",
+            "version": version,
+            "status": "uploaded",
+            "created_at": f"2026-05-28T1{version}:00:00+00:00",
+        }
+    client = make_client(core)
+
+    response = client.post(
+        "/schedules/ch1/cleanup",
+        data={
+            "keep_latest": "2",
+            "cleanup_statuses": ["uploaded"],
+        },
+    )
+
+    assert response.status_code == 200
+    assert ("ch1", 8) in core.state.versions
+    assert ("ch1", 7) in core.state.versions
+    assert ("ch1", 6) not in core.state.versions
+    assert ("ch1", 3) not in core.state.versions
     assert "Cleanup deleted" in response.text
 
 

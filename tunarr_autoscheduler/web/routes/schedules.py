@@ -237,26 +237,24 @@ async def bulk_delete_schedules(request: Request, channel_id: str) -> HTMLRespon
         return await _action_result(
             request, channel, "warning", "Select at least one schedule version.",
         )
-    result = await core.state.delete_schedule_versions(channel_id, versions)
-    deleted = int(result.get("deleted", 0))
-    skipped = result.get("skipped_uploaded", [])
-    skipped_text = (
-        f" Skipped uploaded versions: {', '.join(str(item) for item in skipped)}."
-        if isinstance(skipped, list) and skipped
-        else ""
+    result = await core.state.delete_schedule_versions(
+        channel_id,
+        versions,
+        include_uploaded=True,
     )
+    deleted = int(result.get("deleted", 0))
     logger.info(
         "Bulk deleted schedule versions channel_id=%s requested=%s deleted=%s skipped=%s",
         channel_id,
         versions,
         deleted,
-        skipped,
+        result.get("skipped_uploaded", []),
     )
     return await _action_result(
         request,
         channel,
         "success" if deleted else "warning",
-        f"Deleted {deleted} schedule version(s).{skipped_text}",
+        f"Deleted {deleted} schedule version(s).",
     )
 
 
@@ -272,13 +270,15 @@ async def cleanup_schedules(request: Request, channel_id: str) -> HTMLResponse:
     statuses = [
         str(status)
         for status in form.getlist("cleanup_statuses")
-        if str(status) in {"draft", "approved", "invalid", "rejected"}
+        if str(status) in {"draft", "approved", "invalid", "rejected", "uploaded"}
     ]
     if not statuses:
         statuses = ["draft", "approved", "invalid", "rejected"]
+    include_uploaded = "uploaded" in statuses
     result = await core.state.cleanup_schedule_versions(
         channel_id,
         keep_latest=keep_latest,
+        include_uploaded=include_uploaded,
         statuses=statuses,
     )
     deleted = int(result.get("deleted", 0))
@@ -293,7 +293,7 @@ async def cleanup_schedules(request: Request, channel_id: str) -> HTMLResponse:
         request,
         channel,
         "success" if deleted else "info",
-        f"Cleanup deleted {deleted} old schedule version(s). Uploaded versions were kept.",
+        f"Cleanup deleted {deleted} old schedule version(s).",
     )
 
 
@@ -309,15 +309,6 @@ async def delete_schedule(request: Request, channel_id: str, version: int) -> HT
         return await _action_result(
             request, channel, "danger", "Schedule version not found.", status_code=404,
         )
-    if meta["status"] == "uploaded":
-        return await _action_result(
-            request,
-            channel,
-            "danger",
-            "Uploaded schedules cannot be deleted.",
-            status_code=409,
-        )
-
     deleted = await core.state.delete_schedule_version(channel_id, version)
     if not deleted:
         return await _action_result(
@@ -455,6 +446,7 @@ async def upload_schedule(request: Request, channel_id: str, version: int) -> HT
         channel,
         "success",
         _upload_success_message(version, upload_result),
+        html_message=True,
     )
 
 
@@ -465,9 +457,15 @@ def _find_channel(core: Any, channel_id: str) -> Any:
     return None
 
 
-def _notice(level: str, message: str, status_code: int = 200) -> HTMLResponse:
+def _notice(
+    level: str,
+    message: str,
+    status_code: int = 200,
+    *,
+    html_message: bool = False,
+) -> HTMLResponse:
     safe_level = escape(level, quote=True)
-    safe_message = escape(message)
+    safe_message = message if html_message else escape(message)
     return HTMLResponse(
         f'<div class="alert alert-{safe_level} alert-dismissible fade show" role="alert">'
         f'{safe_message}'
@@ -792,11 +790,13 @@ async def _action_result(
     level: str,
     message: str,
     status_code: int = 200,
+    *,
+    html_message: bool = False,
 ) -> HTMLResponse:
     core = request.app.state.core
     versions = await core.state.list_versions(channel.id)
     template = request.app.state.templates.get_template("schedule_table.html")
-    notice = bytes(_notice(level, message).body).decode()
+    notice = bytes(_notice(level, message, html_message=html_message).body).decode()
     rows = template.render(
         request=request,
         channel=channel,
