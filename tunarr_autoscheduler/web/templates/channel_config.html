@@ -10,8 +10,18 @@
 <body>
 {% set active_page = "dashboard" %}
 {% include "_nav.html" %}
-<main class="container pb-4">
-  <div class="page-header"><h1>Edit Channel - {{ channel.name or channel.id }}</h1></div>
+<main class="container pb-4 app-shell">
+  <div class="page-header page-header-balanced">
+    <div>
+      <div class="eyebrow">Channel Configuration</div>
+      <h1>{{ channel.name or channel.id }}</h1>
+      <p class="page-subtitle">Tune schedule windows, sources, ads, follow-up behavior, and public guide visibility.</p>
+    </div>
+    <div class="page-actions">
+      <a class="btn btn-outline-secondary" href="{{ return_to }}">Back</a>
+      <a class="btn btn-outline-info" href="/channels/{{ channel.id }}/config/export">Export JSON</a>
+    </div>
+  </div>
   {% if saved %}<div class="alert alert-success">Channel saved.</div>{% endif %}
   {% if request.query_params.get("assigned_playlist") == "1" %}
   <div class="alert alert-success">Recommendation playlist assigned to the daypart.</div>
@@ -29,10 +39,9 @@
     <div class="action-bar sticky-actions mb-3">
       <button class="btn btn-gold" type="submit">Save Channel</button>
       <a class="btn btn-outline-secondary" href="{{ return_to }}">Cancel</a>
-      <a class="btn btn-outline-info" href="/channels/{{ channel.id }}/config/export">Export JSON</a>
     </div>
 
-    <ul class="nav nav-tabs mb-3" role="tablist">
+    <ul class="nav nav-tabs mb-3 workflow-tabs" role="tablist">
       <li class="nav-item" role="presentation">
         <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#general" type="button">General</button>
       </li>
@@ -55,7 +64,7 @@
 
     <div class="tab-content">
       <div class="tab-pane fade show active" id="general">
-        <div class="card mb-3">
+        <div class="card mb-3 calm-card">
           <div class="card-header">General</div>
           <div class="card-body">
             <div class="row g-3">
@@ -146,7 +155,7 @@
             </div>
           </div>
         </div>
-        <div class="card mb-3">
+        <div class="card mb-3 calm-card">
           <div class="card-header">Automatic Follow-Up</div>
           <div class="card-body">
             <div class="row g-3 align-items-end">
@@ -520,7 +529,7 @@
           </ul>
         </div>
         {% endif %}
-        <div class="card mb-3">
+        <div class="card mb-3 calm-card">
           <div class="card-header">Ads</div>
           <div class="card-body">
             <div class="row g-3">
@@ -577,7 +586,7 @@
             </div>
           </div>
         </div>
-        <div class="card mb-3">
+        <div class="card mb-3 calm-card">
           <div class="card-header">Daypart Ad Estimate</div>
           <div class="card-body">
             <div class="table-responsive">
@@ -612,7 +621,7 @@
       </div>
 
       <div class="tab-pane fade" id="continuity" data-profile-scope="advanced general_tv">
-        <div class="card mb-3">
+        <div class="card mb-3 calm-card">
           <div class="card-header">Continuity</div>
           <div class="card-body">
             <div class="row g-3">
@@ -668,7 +677,7 @@
       </div>
 
       <div class="tab-pane fade" id="advanced" data-profile-scope="advanced">
-        <div class="card mb-3">
+        <div class="card mb-3 calm-card">
           <div class="card-header">Import Channel Config</div>
           <div class="card-body">
             <div class="form-text mb-2">Paste a JSON export from another channel. The current Tunarr channel ID is kept.</div>
@@ -678,14 +687,14 @@
             </button>
           </div>
         </div>
-        <div class="card mb-3">
+        <div class="card mb-3 calm-card">
           <div class="card-header">Rotations</div>
           <div class="card-body">
             <div class="form-text mb-2">Named rotations are the advanced fallback sources used by dayparts. Keep names stable when dayparts reference them.</div>
             <textarea class="form-control" name="rotations_yaml">{{ rotations_yaml }}</textarea>
           </div>
         </div>
-        <div class="card mb-3">
+        <div class="card mb-3 calm-card">
           <div class="card-header">Pipeline</div>
           <div class="card-body">
             <textarea class="form-control" name="pipeline_text">{{ pipeline_text }}</textarea>

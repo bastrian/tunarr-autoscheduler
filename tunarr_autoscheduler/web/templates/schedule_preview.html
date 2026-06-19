@@ -10,12 +10,13 @@
 <body>
 {% set active_page = "dashboard" %}
 {% include "_nav.html" %}
-<main class="container pb-4">
+<main class="container pb-4 app-shell">
   <div class="page-header">
     <div>
-      <h1>Schedule Preview - {{ channel.name }}</h1>
+      <div class="eyebrow">Schedule Preview</div>
+      <h1>{{ channel.name }}</h1>
       <p class="text-secondary mb-0">
-        Version {{ version }} / {{ rows|length }} blocks / Total {{ timeline.total_duration() }}
+        Version {{ version }} · {{ rows|length }} blocks · Total {{ timeline.total_duration() }}
       </p>
     </div>
     <div class="action-bar">
@@ -53,7 +54,7 @@
   </div>
   {% endif %}
 
-  <section class="preview-summary mb-3" aria-label="Schedule summary">
+  <section class="preview-summary mb-3 ops-summary" aria-label="Schedule summary">
     <div class="preview-stat">
       <span>Total</span>
       <strong>{{ summary.total_blocks }}</strong>
@@ -101,7 +102,7 @@
     </div>
   </section>
 
-  <div class="preview-toolbar mb-3">
+  <div class="preview-toolbar mb-3 filter-panel filter-panel-compact">
     <span class="section-label">Timezone</span>
     <span>{{ timezone }}</span>
     <label class="section-label" for="preview-type-filter">Type</label>

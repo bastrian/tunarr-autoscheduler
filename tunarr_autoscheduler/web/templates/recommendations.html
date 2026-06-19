@@ -11,7 +11,7 @@
 {% set active_page = "recommendations" %}
 {% include "_nav.html" %}
 <main class="container">
-  <div class="page-header">
+  <div class="page-header page-header-balanced">
     <div>
       <h1>Recommendations</h1>
       <div class="text-secondary">Build scheduler playlists from Jellyfin metadata, language rules, and existing playlist signals.</div>
@@ -40,7 +40,7 @@
   </div>
   {% endif %}
 
-  <form class="filter-panel mb-3" method="get" action="/recommendations">
+  <form class="filter-panel builder-panel mb-3" method="get" action="/recommendations">
     <input type="hidden" name="channel_id" value="{{ form.channel_id }}">
     <input type="hidden" name="daypart" value="{{ form.daypart }}">
     {% if form.assign_to_daypart %}<input type="hidden" name="assign_to_daypart" value="1">{% endif %}

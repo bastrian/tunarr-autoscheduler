@@ -10,10 +10,39 @@
 <body>
 {% set active_page = "dashboard" %}
 {% include "_nav.html" %}
-<main class="container pb-4">
-  <div class="page-header"><h1>Schedule Versions - {{ channel.name }}</h1></div>
+<main class="container pb-4 app-shell">
+  <div class="page-header page-header-balanced">
+    <div>
+      <div class="eyebrow">Schedule Operations</div>
+      <h1>{{ channel.name }}</h1>
+      <p class="page-subtitle">Approve, upload, compare, and clean up generated schedule versions.</p>
+    </div>
+    <div class="page-actions">
+          <a class="btn btn-outline-info" href="/schedules/{{ channel.id }}/diff">Compare Latest</a>
+    </div>
+  </div>
   <div id="notifications"></div>
-  <div class="card mb-3">
+  <section class="ops-summary mb-3" aria-label="Version summary">
+    {% set uploaded = versions|selectattr("status", "equalto", "uploaded")|list|first %}
+    {% set waiting = versions|selectattr("status", "in", ["draft", "approved"])|list|first %}
+    <div class="ops-summary-card">
+      <span>Current upload</span>
+      <strong>{% if uploaded %}v{{ uploaded.version }}{% else %}None{% endif %}</strong>
+      <small>{% if uploaded and uploaded.planned_end %}Ends {{ uploaded.planned_end|local_datetime(timezone) }}{% else %}No active uploaded version found{% endif %}</small>
+    </div>
+    <div class="ops-summary-card">
+      <span>Needs review</span>
+      <strong>{% if waiting %}v{{ waiting.version }}{% else %}None{% endif %}</strong>
+      <small>{% if waiting %}{{ waiting.status }}{% else %}No draft or approved version waiting{% endif %}</small>
+    </div>
+    <div class="ops-summary-card">
+      <span>Total versions</span>
+      <strong>{{ versions|length }}</strong>
+      <small>Use cleanup for old drafts and uploaded history.</small>
+    </div>
+  </section>
+
+  <div class="card mb-3 calm-card">
     <div class="card-header">Version Tools</div>
     <div class="card-body">
       <form class="row g-2 align-items-end"
@@ -49,13 +78,12 @@
         hx-target="#notifications"
         hx-swap="innerHTML"
         hx-confirm="Delete selected schedule versions?">
-    <div class="action-bar mb-3">
+    <div class="action-bar mb-3 table-action-bar">
       <button class="btn btn-outline-danger" type="submit">Delete Selected</button>
-      <a class="btn btn-outline-info" href="/schedules/{{ channel.id }}/diff">Compare Latest</a>
+      <span class="text-secondary small">Uploaded versions can be selected and deleted manually when they are no longer needed.</span>
     </div>
   {% include "schedule_table.html" %}
   </form>
-  <a href="/channels/{{ channel.id }}" class="btn btn-outline-secondary">Back to Channel</a>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://unpkg.com/htmx.org@1.9.12"></script>

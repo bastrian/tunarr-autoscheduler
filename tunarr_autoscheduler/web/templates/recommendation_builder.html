@@ -10,11 +10,12 @@
 <body>
 {% set active_page = "recommendations" %}
 {% include "_nav.html" %}
-<main class="container pb-4">
+<main class="container pb-4 app-shell">
   <div class="page-header">
     <div>
+      <div class="eyebrow">Recommendation Studio</div>
       <h1>Recommendation Builder</h1>
-      <div class="text-secondary">Build daypart or channel plans from themes, tags, genres, series, and movies.</div>
+      <p class="page-subtitle">Build daypart or channel plans from themes, tags, genres, series, and movies.</p>
     </div>
     <div class="action-bar">
       <a class="btn btn-outline-light" href="/recommendations/runs">Run History</a>
@@ -29,9 +30,9 @@
   <div class="alert alert-info">Fresh preview generated from saved run {{ rerun_source_id }}. Save it to keep this rerun.</div>
   {% endif %}
 
-  <form class="filter-panel mb-3" method="get" action="/recommendations/builder">
+  <form class="filter-panel builder-panel mb-3" method="get" action="/recommendations/builder">
     <input type="hidden" name="preview" value="1">
-    <div class="row g-3 align-items-end">
+    <div class="row g-3 align-items-end builder-grid">
       <div class="col-md-3">
         <label class="form-label" for="mode">Build</label>
         <select class="form-select" id="mode" name="mode">
@@ -128,8 +129,8 @@
   </form>
 
   {% if suggestions %}
-  <div class="filter-panel mb-3">
-    <div class="small text-secondary mb-2">Theme suggestions from your Jellyfin metadata</div>
+  <div class="filter-panel suggestion-panel mb-3">
+    <div class="section-label mb-2">Theme suggestions from your Jellyfin metadata</div>
     <div class="tag-list">
       {% for suggestion in suggestions %}
       <span class="tag-chip">{{ suggestion.name }} <span class="text-secondary">{{ suggestion.count }}</span></span>
@@ -145,7 +146,7 @@
     using {{ plan.source_context.playlist_count }} matching playlist{{ "s" if plan.source_context.playlist_count != 1 else "" }} as recommendation signal.
   </div>
   {% endif %}
-  <form class="card mb-3" method="post" action="/recommendations/builder/runs">
+  <form class="card mb-3 calm-card builder-result" method="post" action="/recommendations/builder/runs">
     {% for key, value in form.items() %}
     {% if key != "manual_dayparts" and key != "preview" %}
     <input type="hidden" name="{{ key }}" value="{{ value }}">
