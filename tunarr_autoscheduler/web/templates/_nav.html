@@ -1,33 +1,15 @@
 <nav class="navbar app-navbar mb-4">
   <div class="container">
     <a class="navbar-brand" href="/">Tunarr AutoScheduler</a>
-    <button class="navbar-toggler app-navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#app-navigation" aria-controls="app-navigation" aria-expanded="false" aria-label="Toggle navigation">
-      <span></span><span></span><span></span>
-    </button>
-    <div class="collapse navbar-collapse app-navbar-collapse" id="app-navigation">
-      <div class="navbar-nav">
-        <a class="nav-link {% if active_page == 'dashboard' %}active{% endif %}" href="/">Dashboard</a>
-        <div class="nav-item dropdown">
-          <button class="nav-link dropdown-toggle {% if active_page in ['playlists', 'recommendations'] %}active{% endif %}" type="button" data-bs-toggle="dropdown" aria-expanded="false">Content</button>
-          <ul class="dropdown-menu dropdown-menu-dark app-nav-menu">
-            <li><a class="dropdown-item" href="/playlists">Playlists</a></li>
-            <li><a class="dropdown-item" href="/playlist-categories">Playlist Categories</a></li>
-            <li><a class="dropdown-item" href="/recommendations">Recommendations</a></li>
-            <li><a class="dropdown-item" href="/recommendations/builder">Recommendation Builder</a></li>
-            <li><a class="dropdown-item" href="/recommendations/runs">Recommendation History</a></li>
-          </ul>
-        </div>
-        <div class="nav-item dropdown">
-          <button class="nav-link dropdown-toggle {% if active_page in ['jobs', 'health', 'uploads', 'notifications'] %}active{% endif %}" type="button" data-bs-toggle="dropdown" aria-expanded="false">Operations</button>
-          <ul class="dropdown-menu dropdown-menu-dark app-nav-menu">
-            <li><a class="dropdown-item" href="/jobs">Jobs</a></li>
-            <li><a class="dropdown-item" href="/channel-health">Health</a></li>
-            <li><a class="dropdown-item" href="/uploads">Uploads</a></li>
-            <li><a class="dropdown-item" href="/notifications">Notifications</a></li>
-          </ul>
-        </div>
-        <a class="nav-link {% if active_page == 'settings' %}active{% endif %}" href="/settings">Settings</a>
-      </div>
+    <div class="navbar-nav">
+      <a class="nav-link {% if active_page == 'dashboard' %}active{% endif %}" href="/">Dashboard</a>
+      <a class="nav-link {% if active_page == 'playlists' %}active{% endif %}" href="/playlists">Playlists</a>
+      <a class="nav-link {% if active_page == 'recommendations' %}active{% endif %}" href="/recommendations">Recommendations</a>
+      <a class="nav-link {% if active_page == 'jobs' %}active{% endif %}" href="/jobs">Jobs</a>
+      <a class="nav-link {% if active_page == 'health' %}active{% endif %}" href="/channel-health">Health</a>
+      <a class="nav-link {% if active_page == 'uploads' %}active{% endif %}" href="/uploads">Uploads</a>
+      <a class="nav-link {% if active_page == 'notifications' %}active{% endif %}" href="/notifications">Notifications</a>
+      <a class="nav-link {% if active_page == 'settings' %}active{% endif %}" href="/settings">Settings</a>
     </div>
   </div>
 </nav>
