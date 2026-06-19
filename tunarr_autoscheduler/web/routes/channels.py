@@ -7,7 +7,7 @@ from datetime import datetime
 from enum import Enum
 from html import escape
 from typing import Any, Protocol, cast
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode, urlsplit
 
 import yaml
 from fastapi import APIRouter, Request
@@ -165,11 +165,12 @@ async def channel_config_import(request: Request, channel_id: str) -> Response:
         return HTMLResponse("Channel not found", status_code=404)
     form = await request.form()
     return_to = _safe_return_to(str(form.get("return_to", ""))) or "/"
+    channel_path_id = quote(channel_id, safe="")
     raw = str(form.get("import_json", "")).strip()
     if not raw:
         query = urlencode({"return_to": return_to, "import_error": "empty"})
         return RedirectResponse(
-            f"/channels/{channel_id}/config?{query}",
+            f"/channels/{channel_path_id}/config?{query}",
             status_code=303,
         )
     try:
@@ -184,7 +185,7 @@ async def channel_config_import(request: Request, channel_id: str) -> Response:
     except (TypeError, ValueError, json.JSONDecodeError, ValidationError):
         query = urlencode({"return_to": return_to, "import_error": "invalid"})
         return RedirectResponse(
-            f"/channels/{channel_id}/config?{query}",
+            f"/channels/{channel_path_id}/config?{query}",
             status_code=303,
         )
 
@@ -196,7 +197,7 @@ async def channel_config_import(request: Request, channel_id: str) -> Response:
     core.config_manager.save()
     query = urlencode({"return_to": return_to, "imported": "1"})
     return RedirectResponse(
-        f"/channels/{channel_id}/config?{query}",
+        f"/channels/{channel_path_id}/config?{query}",
         status_code=303,
     )
 
@@ -371,10 +372,9 @@ async def channel_config_save(request: Request, channel_id: str) -> Response:
             break
     core.config_manager.save()
     return_to = _safe_return_to(str(form.get("return_to", ""))) or "/"
-    return RedirectResponse(
-        f"{return_to}{'&' if '?' in return_to else '?'}saved_channel={updated.id}",
-        status_code=303,
-    )
+    query_separator = "&" if urlsplit(return_to).query else "?"
+    saved_channel = urlencode({"saved_channel": updated.id})
+    return RedirectResponse(f"{return_to}{query_separator}{saved_channel}", status_code=303)
 
 
 @router.post("/channels/{channel_id}/toggle", response_class=HTMLResponse)
@@ -1379,9 +1379,11 @@ def _notice(level: str, message: str, status_code: int = 200) -> HTMLResponse:
 
 
 def _notice_html(level: str, message: str) -> str:
+    safe_level = escape(level, quote=True)
+    safe_message = escape(message)
     return (
-        f'<div class="alert alert-{level} alert-dismissible fade show" role="alert">'
-        f'{message}'
+        f'<div class="alert alert-{safe_level} alert-dismissible fade show" role="alert">'
+        f'{safe_message}'
         '<button type="button" class="btn-close" data-bs-dismiss="alert" '
         'aria-label="Close"></button>'
         '</div>'
@@ -1451,8 +1453,15 @@ def _job_value(job: Any, key: str) -> str:
 
 
 def _safe_return_to(value: str | None) -> str:
-    if value and value.startswith("/") and not value.startswith("//"):
-        return value
+    if value:
+        parsed = urlsplit(value)
+        if (
+            not parsed.scheme
+            and not parsed.netloc
+            and parsed.path.startswith("/")
+            and not parsed.path.startswith("//")
+        ):
+            return value
     return "/"
 
 

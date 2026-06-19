@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from urllib.parse import urlsplit
+
 import httpx
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
@@ -124,8 +126,18 @@ def _public_login_error(request: Request, error: str, return_to: str) -> HTMLRes
 
 
 def _safe_return_to(value: str) -> str:
-    if not value.startswith("/") or value.startswith("//"):
+    parsed = urlsplit(value)
+    if parsed.scheme or parsed.netloc:
         return "/epg"
-    if value.startswith(("/epg", "/public/epg")):
+    if not parsed.path.startswith("/") or parsed.path.startswith("//"):
+        return "/epg"
+    if parsed.path in {"/epg", "/public/epg"}:
+        suffix = ""
+        if parsed.query:
+            suffix += f"?{parsed.query}"
+        if parsed.fragment:
+            suffix += f"#{parsed.fragment}"
+        return f"{parsed.path}{suffix}"
+    if parsed.path.startswith(("/epg/", "/public/epg/")):
         return value
     return "/epg"

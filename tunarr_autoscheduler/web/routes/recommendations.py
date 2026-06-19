@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import Counter
 from datetime import UTC, datetime
 from typing import Any, cast
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
@@ -404,13 +404,14 @@ async def recommendation_playlist_create(request: Request) -> Response:
         playlist_id = playlist.id
     if form.get("assign_to_daypart") and playlist_id:
         if _assign_playlist_to_daypart(request, form, playlist_id):
+            channel_path_id = quote(str(form["channel_id"]), safe="")
             query = urlencode({
                 "saved": "1",
                 "assigned_playlist": "1",
-                "return_to": f"/channels/{form['channel_id']}",
+                "return_to": f"/channels/{channel_path_id}",
             })
             return RedirectResponse(
-                f"/channels/{form['channel_id']}/config?{query}#dayparts",
+                f"/channels/{channel_path_id}/config?{query}#dayparts",
                 status_code=303,
             )
         return RedirectResponse(
@@ -439,8 +440,9 @@ async def recommendation_daypart_fix(request: Request) -> Response:
         if result.accepted
     ]
     if not results:
+        channel_path_id = quote(channel.id, safe="")
         return RedirectResponse(
-            f"/channels/{channel.id}/config?error=No%20recommendation%20fix%20candidates#dayparts",
+            f"/channels/{channel_path_id}/config?error=No%20recommendation%20fix%20candidates#dayparts",
             status_code=303,
         )
     repo = _playlist_repo(request)
@@ -474,8 +476,9 @@ async def recommendation_daypart_fix(request: Request) -> Response:
     if playlist.id not in daypart.playlist_ids:
         daypart.playlist_ids.append(playlist.id)
     request.app.state.core.config_manager.save()
+    channel_path_id = quote(channel.id, safe="")
     return RedirectResponse(
-        f"/channels/{channel.id}/config?saved=1&assigned_playlist=1#dayparts",
+        f"/channels/{channel_path_id}/config?saved=1&assigned_playlist=1#dayparts",
         status_code=303,
     )
 
