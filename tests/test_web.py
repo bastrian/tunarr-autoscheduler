@@ -1248,7 +1248,7 @@ def test_channel_config_save_rejects_external_return_to() -> None:
     )
 
     assert response.status_code == 303
-    assert response.headers["location"] == "/?saved_channel=ch1"
+    assert response.headers["location"] == "/?saved=1"
 
 
 def test_settings_save_metadata_config() -> None:
@@ -2064,7 +2064,7 @@ def test_channel_config_daypart_fix_creates_and_assigns_playlist() -> None:
 
     daypart = core.config_manager.config().channels[0].dayparts[0]
     assert response.status_code == 303
-    assert response.headers["location"].endswith("#dayparts")
+    assert response.headers["location"] == "/?saved=1&assigned_playlist=1"
     assert daypart.playlist_ids == ["playlist-1"]
     playlist = core.playlist_repo.playlists["playlist-1"]
     assert playlist.channel_scope == "ch1"
@@ -2108,8 +2108,7 @@ def test_recommendations_can_assign_created_playlist_to_daypart() -> None:
     )
 
     assert response.status_code == 303
-    assert response.headers["location"].startswith("/channels/ch1/config?")
-    assert response.headers["location"].endswith("#dayparts")
+    assert response.headers["location"] == "/?saved=1&assigned_playlist=1"
     assert core.config_manager.saved is True
     assert core.config_manager.config().channels[0].dayparts[0].playlist_ids == [
         "playlist-1",
@@ -3207,7 +3206,7 @@ def test_generate_route_reports_disabled_channel() -> None:
     response = client.post("/channels/ch1/generate")
 
     assert response.status_code == 409
-    assert "scheduling disabled" in response.text
+    assert "scheduling disabled" in response.text.lower()
     assert core.job_manager.started is False
 
 
@@ -3414,7 +3413,7 @@ def test_channel_config_editor_rejects_invalid_yaml_shape() -> None:
     })
 
     assert response.status_code == 400
-    assert "Expected a YAML list" in response.text
+    assert "Invalid channel config. Check the submitted fields and YAML sections." in response.text
 
 
 def test_schedule_preview_uses_saved_version() -> None:

@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import Counter
 from datetime import UTC, datetime
 from typing import Any, cast
-from urllib.parse import quote, urlencode
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
@@ -48,9 +48,9 @@ async def recommendation_list(request: Request) -> HTMLResponse:
     try:
         results = await _run_recommendations(request, form)
         error = request.query_params.get("error", "")
-    except ValueError as exc:
+    except ValueError:
         results = []
-        error = str(exc)
+        error = "Recommendation request is invalid."
     return await _render_recommendations(request, form, results, error=error)
 
 
@@ -174,9 +174,8 @@ async def recommendation_builder_generate_draft(request: Request, run_id: str) -
                 status_code=303,
             )
         await core.job_manager.start_generation(channel, "fresh")
-    except Exception as exc:
-        query = urlencode({"error": str(exc)})
-        return RedirectResponse(f"/recommendations/runs?{query}", status_code=303)
+    except Exception:
+        return RedirectResponse("/recommendations/runs?error=generation_failed", status_code=303)
     return RedirectResponse(
         f"/recommendations/runs?applied=1&generated=1&channel_id={channel.id}",
         status_code=303,
@@ -353,10 +352,7 @@ async def recommendation_playlist_create(request: Request) -> Response:
         seen.add(key)
 
     if not items:
-        return RedirectResponse(
-            f"/recommendations?{_query_string(form, error='Select at least one recommendation.')}",
-            status_code=303,
-        )
+        return RedirectResponse("/recommendations?error=select_recommendation", status_code=303)
 
     name = str(form_data.get("name", "")).strip() or _default_playlist_name(form["profile"])
     description = str(form_data.get("description", "")).strip()
@@ -376,10 +372,7 @@ async def recommendation_playlist_create(request: Request) -> Response:
     if mode in {"replace", "append"} and target_playlist_id:
         existing = await repo.get(target_playlist_id)
         if existing is None:
-            return RedirectResponse(
-                f"/recommendations?{_query_string(form, error='Target playlist was not found.')}",
-                status_code=303,
-            )
+            return RedirectResponse("/recommendations?error=playlist_not_found", status_code=303)
         if mode == "append":
             items = _merge_playlist_items(existing.items, items)
         await repo.update(
@@ -404,20 +397,8 @@ async def recommendation_playlist_create(request: Request) -> Response:
         playlist_id = playlist.id
     if form.get("assign_to_daypart") and playlist_id:
         if _assign_playlist_to_daypart(request, form, playlist_id):
-            channel_path_id = quote(str(form["channel_id"]), safe="")
-            query = urlencode({
-                "saved": "1",
-                "assigned_playlist": "1",
-                "return_to": f"/channels/{channel_path_id}",
-            })
-            return RedirectResponse(
-                f"/channels/{channel_path_id}/config?{query}#dayparts",
-                status_code=303,
-            )
-        return RedirectResponse(
-            f"/recommendations?{_query_string(form, error='Daypart assignment failed.')}",
-            status_code=303,
-        )
+            return RedirectResponse("/?saved=1&assigned_playlist=1", status_code=303)
+        return RedirectResponse("/recommendations?error=daypart_assignment_failed", status_code=303)
     return RedirectResponse("/playlists?saved=1", status_code=303)
 
 
@@ -431,20 +412,13 @@ async def recommendation_daypart_fix(request: Request) -> Response:
     channel = _find_channel(request, str(form.get("channel_id", "")))
     daypart = _find_daypart(channel, str(form.get("daypart", ""))) if channel else None
     if channel is None or daypart is None:
-        return RedirectResponse(
-            f"/recommendations?{_query_string(form, error='Channel or daypart not found.')}",
-            status_code=303,
-        )
+        return RedirectResponse("/recommendations?error=daypart_not_found", status_code=303)
     results = [
         result for result in await _run_recommendations(request, form, playlist_limit=form["limit"])
         if result.accepted
     ]
     if not results:
-        channel_path_id = quote(channel.id, safe="")
-        return RedirectResponse(
-            f"/channels/{channel_path_id}/config?error=No%20recommendation%20fix%20candidates#dayparts",
-            status_code=303,
-        )
+        return RedirectResponse("/?error=no_recommendation_fix_candidates", status_code=303)
     repo = _playlist_repo(request)
     tags = _auto_recommendation_tags(
         ["recommended", "auto-fix", daypart.name],
@@ -476,11 +450,7 @@ async def recommendation_daypart_fix(request: Request) -> Response:
     if playlist.id not in daypart.playlist_ids:
         daypart.playlist_ids.append(playlist.id)
     request.app.state.core.config_manager.save()
-    channel_path_id = quote(channel.id, safe="")
-    return RedirectResponse(
-        f"/channels/{channel_path_id}/config?saved=1&assigned_playlist=1#dayparts",
-        status_code=303,
-    )
+    return RedirectResponse("/?saved=1&assigned_playlist=1", status_code=303)
 
 
 async def _render_recommendations(

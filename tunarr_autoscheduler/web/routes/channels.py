@@ -7,7 +7,7 @@ from datetime import datetime
 from enum import Enum
 from html import escape
 from typing import Any, Protocol, cast
-from urllib.parse import quote, urlencode, urlsplit
+from urllib.parse import urlencode, urlsplit
 
 import yaml
 from fastapi import APIRouter, Request
@@ -164,15 +164,9 @@ async def channel_config_import(request: Request, channel_id: str) -> Response:
     if not channel:
         return HTMLResponse("Channel not found", status_code=404)
     form = await request.form()
-    return_to = _safe_return_to(str(form.get("return_to", ""))) or "/"
-    channel_path_id = quote(channel_id, safe="")
     raw = str(form.get("import_json", "")).strip()
     if not raw:
-        query = urlencode({"return_to": return_to, "import_error": "empty"})
-        return RedirectResponse(
-            f"/channels/{channel_path_id}/config?{query}",
-            status_code=303,
-        )
+        return RedirectResponse("/?import_error=empty", status_code=303)
     try:
         payload = json.loads(raw)
         raw_channel = payload.get("channel") if isinstance(payload, dict) else payload
@@ -183,11 +177,7 @@ async def channel_config_import(request: Request, channel_id: str) -> Response:
             "id": channel_id,
         })
     except (TypeError, ValueError, json.JSONDecodeError, ValidationError):
-        query = urlencode({"return_to": return_to, "import_error": "invalid"})
-        return RedirectResponse(
-            f"/channels/{channel_path_id}/config?{query}",
-            status_code=303,
-        )
+        return RedirectResponse("/?import_error=invalid", status_code=303)
 
     channels = core.config_manager.config().channels
     for index, existing in enumerate(channels):
@@ -195,11 +185,7 @@ async def channel_config_import(request: Request, channel_id: str) -> Response:
             channels[index] = updated
             break
     core.config_manager.save()
-    query = urlencode({"return_to": return_to, "imported": "1"})
-    return RedirectResponse(
-        f"/channels/{channel_path_id}/config?{query}",
-        status_code=303,
-    )
+    return RedirectResponse("/?imported=1", status_code=303)
 
 
 @router.post("/channels/{channel_id}/config", response_class=HTMLResponse)
@@ -319,7 +305,7 @@ async def channel_config_save(request: Request, channel_id: str) -> Response:
             **channel.model_dump(mode="python"),
             **values,
         })
-    except (TypeError, ValueError, yaml.YAMLError, ValidationError) as e:
+    except (TypeError, ValueError, yaml.YAMLError, ValidationError):
         template = request.app.state.templates.get_template("channel_config.html")
         filler_fit = await _load_filler_fit(
             core, channel.ads.filler_list_id,
@@ -337,7 +323,7 @@ async def channel_config_save(request: Request, channel_id: str) -> Response:
             request=request,
             channel=channel,
             daypart_rows=daypart_rows,
-            error=f"Invalid channel config: {e}",
+            error="Invalid channel config. Check the submitted fields and YAML sections.",
             saved=False,
             imported=False,
             import_error="",
@@ -371,10 +357,7 @@ async def channel_config_save(request: Request, channel_id: str) -> Response:
             channels[index] = updated
             break
     core.config_manager.save()
-    return_to = _safe_return_to(str(form.get("return_to", ""))) or "/"
-    query_separator = "&" if urlsplit(return_to).query else "?"
-    saved_channel = urlencode({"saved_channel": updated.id})
-    return RedirectResponse(f"{return_to}{query_separator}{saved_channel}", status_code=303)
+    return RedirectResponse("/?saved=1", status_code=303)
 
 
 @router.post("/channels/{channel_id}/toggle", response_class=HTMLResponse)
@@ -435,8 +418,14 @@ async def generate_schedule(request: Request, channel_id: str) -> HTMLResponse:
         job = await core.job_manager.start_generation(
             channel, generation_mode, parent_version=parent_version,
         )
-    except ValueError as e:
-        return _notice("danger", str(e), status_code=409)
+    except ValueError:
+        if not channel.scheduling_enabled:
+            return _notice("danger", "Channel scheduling disabled.", status_code=409)
+        return _notice(
+            "danger",
+            "Generation could not be started with the selected options.",
+            status_code=409,
+        )
     mode_label = "Follow-up" if generation_mode == "follow_up" else "New"
     parent_label = f" after version {parent_version}" if parent_version else ""
     return HTMLResponse(
