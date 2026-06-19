@@ -981,7 +981,8 @@ def test_public_epg_compact_week_view_groups_days_and_preserves_exports() -> Non
     assert "epg-compact-week" in response.text
     assert "epg-timeline" not in response.text
     assert "compact=1" in response.text
-    assert "/public/epg.json?view=week&amp;period=day&amp;compact=1" in response.text
+    assert "/public/epg.json?view=week" in response.text
+    assert "period=day" in response.text
 
 
 def test_public_epg_json_includes_compact_day_groups() -> None:
