@@ -1756,6 +1756,13 @@ textarea.form-control {
 
 .app-navbar .container { gap: 1rem; }
 .app-navbar-collapse { flex-grow: 0; }
+
+@media (min-width: 992px) {
+  .app-navbar-collapse.collapse {
+    display: flex !important;
+  }
+}
+
 .app-navbar .navbar-nav { align-items: center; gap: 0.15rem; }
 .app-navbar .nav-item.dropdown { display: flex; align-items: center; }
 .app-navbar .dropdown-toggle { background: transparent; border: 0; }
