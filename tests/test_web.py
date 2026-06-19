@@ -2855,6 +2855,84 @@ def test_settings_page_saves_timezone() -> None:
     assert core.config_manager.saved is True
 
 
+def test_settings_page_shows_admin_login_form() -> None:
+    client = make_client(Core())
+
+    response = client.get("/settings")
+
+    assert response.status_code == 200
+    assert "Admin Login" in response.text
+    assert 'name="auth_username"' in response.text
+    assert 'name="auth_current_password"' in response.text
+    assert 'name="auth_new_password"' in response.text
+
+
+def test_settings_admin_login_rejects_wrong_current_password() -> None:
+    core = Core()
+    client = make_client(core)
+    original_hash = core.config_manager.config().auth.password_hash
+
+    response = client.post(
+        "/settings",
+        data={
+            "timezone": "Europe/Berlin",
+            "auth_submitted": "1",
+            "auth_username": "new-admin",
+            "auth_current_password": "wrong",
+            "auth_new_password": "new-password",
+            "auth_confirm_password": "new-password",
+        },
+    )
+
+    assert response.status_code == 400
+    assert "Current password is incorrect." in response.text
+    assert core.config_manager.config().auth.username == "admin"
+    assert core.config_manager.config().auth.password_hash == original_hash
+
+
+def test_settings_admin_login_updates_credentials_and_requires_relogin() -> None:
+    core = Core()
+    client = make_client(core)
+
+    response = client.post(
+        "/settings",
+        data={
+            "timezone": "Europe/Berlin",
+            "auth_submitted": "1",
+            "auth_username": "new-admin",
+            "auth_current_password": "password123",
+            "auth_new_password": "new-password",
+            "auth_confirm_password": "new-password",
+        },
+        follow_redirects=False,
+    )
+
+    config = core.config_manager.config()
+    assert response.status_code == 303
+    assert response.headers["location"] == "/login?credentials_changed=1"
+    assert config.auth.username == "new-admin"
+    assert config.auth.password_hash.startswith("pbkdf2_sha256$")
+    assert core.config_manager.saved is True
+
+    protected = client.get("/", follow_redirects=False)
+    assert protected.status_code == 303
+    assert protected.headers["location"] == "/login"
+
+    old_login = client.post(
+        "/login",
+        data={"username": "admin", "password": "password123"},
+    )
+    assert old_login.status_code == 401
+
+    new_login = client.post(
+        "/login",
+        data={"username": "new-admin", "password": "new-password"},
+        follow_redirects=False,
+    )
+    assert new_login.status_code == 303
+    assert new_login.headers["location"] == "/"
+
+
 def test_schedule_list_formats_times_in_configured_timezone() -> None:
     core = Core()
     core.config_manager.config().timezone = "Europe/Berlin"
