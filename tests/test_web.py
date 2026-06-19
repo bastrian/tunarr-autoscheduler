@@ -1280,6 +1280,44 @@ def test_settings_save_public_access_config() -> None:
     assert core.config_manager.saved is True
 
 
+def test_settings_save_connection_config() -> None:
+    core = Core()
+    client = make_client(core)
+
+    response = client.post("/settings", data={
+        "timezone": "Europe/Berlin",
+        "connections_submitted": "1",
+        "jellyfin_url": "http://jellyfin.local:8096",
+        "jellyfin_api_key": "new-jellyfin-key",
+        "jellyfin_user_id": "new-user-id",
+        "jellyfin_sync_interval_minutes": "30",
+        "tunarr_url": "http://tunarr.local:8000",
+    }, follow_redirects=False)
+
+    config = core.config_manager.config()
+    assert response.status_code == 303
+    assert config.jellyfin.url == "http://jellyfin.local:8096"
+    assert config.jellyfin.api_key == "new-jellyfin-key"
+    assert config.jellyfin.user_id == "new-user-id"
+    assert config.jellyfin.sync_interval_minutes == 30
+    assert config.tunarr.url == "http://tunarr.local:8000"
+    assert core.config_manager.saved is True
+
+
+def test_settings_page_has_tabs_and_help_tooltips() -> None:
+    client = make_client(Core())
+
+    response = client.get("/settings")
+
+    assert response.status_code == 200
+    assert 'id="settings-tabs"' in response.text
+    assert 'data-settings-tab="integrations"' in response.text
+    assert 'data-settings-section="metadata"' in response.text
+    assert 'data-bs-toggle="tooltip"' in response.text
+    assert 'name="connections_submitted"' in response.text
+    assert "Jellyfin / Tunarr Connections" in response.text
+
+
 def test_settings_can_test_jellystat_without_saving(monkeypatch) -> None:
     core = Core()
     client = make_client(core)

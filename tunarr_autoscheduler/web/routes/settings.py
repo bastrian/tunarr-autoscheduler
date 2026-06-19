@@ -118,6 +118,23 @@ async def save_settings(request: Request) -> Response:
             "public",
         } else "public"
         data["public_access"] = public_access
+    if "connections_submitted" in form:
+        jellyfin = dict(data.get("jellyfin") or {})
+        jellyfin["url"] = str(form.get("jellyfin_url", jellyfin.get("url", ""))).strip()
+        jellyfin["api_key"] = str(
+            form.get("jellyfin_api_key", jellyfin.get("api_key", "")),
+        ).strip()
+        jellyfin["user_id"] = str(
+            form.get("jellyfin_user_id", jellyfin.get("user_id", "")),
+        ).strip()
+        jellyfin["sync_interval_minutes"] = _int_form(
+            form.get("jellyfin_sync_interval_minutes"),
+            jellyfin.get("sync_interval_minutes", 15),
+        )
+        data["jellyfin"] = jellyfin
+        tunarr = dict(data.get("tunarr") or {})
+        tunarr["url"] = str(form.get("tunarr_url", tunarr.get("url", ""))).strip()
+        data["tunarr"] = tunarr
     if "auth_submitted" in form:
         auth_error = _auth_update_error(form, current_config)
         if auth_error:
