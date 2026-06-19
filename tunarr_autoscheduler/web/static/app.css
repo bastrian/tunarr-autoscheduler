@@ -608,6 +608,55 @@ textarea.form-control {
   color: var(--accent);
 }
 
+.settings-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin: 0.4rem 0 0.8rem;
+  padding: 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+}
+
+.settings-tab {
+  padding: 0.55rem 0.8rem;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.settings-tab:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.settings-tab.active {
+  border-color: #9e792f;
+  background: #2a2110;
+  color: var(--accent);
+}
+
+.settings-tab-intro {
+  margin-bottom: 1rem;
+  padding: 0.75rem 0.95rem;
+  border-left: 4px solid var(--accent);
+  border-radius: 5px;
+  background: #111822;
+  color: var(--muted);
+}
+
+.settings-status-panel {
+  margin-bottom: 1rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid #35576a;
+  border-radius: 6px;
+  background: #101d26;
+  color: var(--text);
+}
+
 .preview-filter {
   width: auto;
   min-width: 9rem;

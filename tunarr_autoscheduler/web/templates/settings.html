@@ -8,6 +8,9 @@
 <link href="/static/app.css" rel="stylesheet">
 </head>
 <body>
+{% macro help_tip(text) -%}
+<span class="help-dot" tabindex="0" title="{{ text }}" data-bs-toggle="tooltip" data-bs-placement="top">?</span>
+{%- endmacro %}
 {% set active_page = "settings" %}
 {% include "_nav.html" %}
 <main class="container pb-4">
@@ -27,12 +30,38 @@
     {{ metadata_rate_limit_alert.created_at }}.
   </div>
   {% endif %}
-  <div class="card mb-3">
+  <div id="settings-tabs" class="settings-tabs" role="tablist" aria-label="Settings sections">
+    <button class="settings-tab active" type="button" data-settings-tab="general">General</button>
+    <button class="settings-tab" type="button" data-settings-tab="access">Access</button>
+    <button class="settings-tab" type="button" data-settings-tab="integrations">Integrations</button>
+    <button class="settings-tab" type="button" data-settings-tab="notifications">Notifications</button>
+    <button class="settings-tab" type="button" data-settings-tab="operations">Operations</button>
+    <button class="settings-tab" type="button" data-settings-tab="metadata">Metadata</button>
+  </div>
+  <div class="settings-tab-intro" data-settings-intro="general">
+    Core application behavior and public guide visibility.
+  </div>
+  <div class="settings-tab-intro" data-settings-intro="access" hidden>
+    Admin credentials and access-sensitive controls.
+  </div>
+  <div class="settings-tab-intro" data-settings-intro="integrations" hidden>
+    Jellyfin, Tunarr, channel sync, and media sync settings.
+  </div>
+  <div class="settings-tab-intro" data-settings-intro="notifications" hidden>
+    Telegram, email, webhook, and routing rule configuration.
+  </div>
+  <div class="settings-tab-intro" data-settings-intro="operations" hidden>
+    Backups and operational safeguards.
+  </div>
+  <div class="settings-tab-intro" data-settings-intro="metadata" hidden>
+    Public EPG enrichment, external provider limits, and coverage diagnostics.
+  </div>
+  <div class="card mb-3" data-settings-section="general">
     <div class="card-header">Application</div>
     <div class="card-body">
       <form method="post" action="/settings" class="row g-3 align-items-end">
         <div class="col-md-6">
-          <label class="form-label" for="timezone">Timezone</label>
+          <label class="form-label" for="timezone">Timezone {{ help_tip("Controls how schedules, previews, and public EPG times are displayed.") }}</label>
           <input class="form-control" id="timezone" name="timezone"
                  value="{{ config.timezone }}" list="timezone-options" required>
           <datalist id="timezone-options">
@@ -49,25 +78,25 @@
       </form>
     </div>
   </div>
-  <div class="card mb-3">
+  <div class="card mb-3" data-settings-section="access" hidden>
     <div class="card-header">Admin Login</div>
     <div class="card-body">
       <form method="post" action="/settings" class="row g-3 align-items-end">
         <input type="hidden" name="timezone" value="{{ config.timezone }}">
         <input type="hidden" name="auth_submitted" value="1">
         <div class="col-md-3">
-          <label class="form-label" for="auth_username">Username</label>
+          <label class="form-label" for="auth_username">Username {{ help_tip("The local administrator username for this scheduler UI.") }}</label>
           <input class="form-control" id="auth_username" name="auth_username"
                  value="{{ config.auth.username }}" autocomplete="username" required>
         </div>
         <div class="col-md-3">
-          <label class="form-label" for="auth_current_password">Current Password</label>
+          <label class="form-label" for="auth_current_password">Current Password {{ help_tip("Required before changing the admin login.") }}</label>
           <input class="form-control" id="auth_current_password"
                  name="auth_current_password" type="password"
                  autocomplete="current-password" required>
         </div>
         <div class="col-md-3">
-          <label class="form-label" for="auth_new_password">New Password</label>
+          <label class="form-label" for="auth_new_password">New Password {{ help_tip("Use at least 8 characters. Saving signs out the current browser session.") }}</label>
           <input class="form-control" id="auth_new_password"
                  name="auth_new_password" type="password" minlength="8"
                  autocomplete="new-password" required>
@@ -89,14 +118,14 @@
       </form>
     </div>
   </div>
-  <div class="card mb-3">
+  <div class="card mb-3" data-settings-section="operations" hidden>
     <div class="card-header">Automated Backups</div>
     <div class="card-body">
       <form method="post" action="/settings" class="row g-3 align-items-end">
         <input type="hidden" name="timezone" value="{{ config.timezone }}">
         <input type="hidden" name="backups_submitted" value="1">
         <div class="col-md-3">
-          <label class="form-label" for="backups_enabled">Scheduled Backups</label>
+          <label class="form-label" for="backups_enabled">Scheduled Backups {{ help_tip("Creates rotating archives of config and the scheduler database.") }}</label>
           <div class="form-switch-card">
             <input class="form-check-input" id="backups_enabled"
                    name="backups_enabled" type="checkbox"
@@ -122,7 +151,7 @@
                  value="{{ config.backups.retention_count }}">
         </div>
         <div class="col-md-2">
-          <label class="form-label" for="backups_min_free_mb">Min Free MB</label>
+          <label class="form-label" for="backups_min_free_mb">Min Free MB {{ help_tip("Backups are skipped when disk space would fall below this reserve.") }}</label>
           <input class="form-control" id="backups_min_free_mb"
                  name="backups_min_free_mb" type="number" min="1"
                  value="{{ config.backups.min_free_mb }}">
@@ -144,14 +173,14 @@
       </form>
     </div>
   </div>
-  <div class="card mb-3">
+  <div class="card mb-3" data-settings-section="general">
     <div class="card-header">Public Access</div>
     <div class="card-body">
       <form method="post" action="/settings" class="row g-3 align-items-end">
         <input type="hidden" name="timezone" value="{{ config.timezone }}">
         <input type="hidden" name="public_access_submitted" value="1">
         <div class="col-md-5">
-          <label class="form-label" for="public_epg_access">EPG and Public Guide Exports</label>
+          <label class="form-label" for="public_epg_access">EPG and Public Guide Exports {{ help_tip("Controls access for public guide pages, EPG images, JSON exports, and XMLTV exports.") }}</label>
           <select class="form-select" id="public_epg_access" name="public_epg_access">
             <option value="disabled" {% if config.public_access.epg == "disabled" %}selected{% endif %}>Deaktiviert</option>
             <option value="jellyfin_login" {% if config.public_access.epg == "jellyfin_login" %}selected{% endif %}>Nur mit Jellyfin Login</option>
@@ -167,14 +196,14 @@
       </form>
     </div>
   </div>
-  <div class="card mb-3">
+  <div class="card mb-3" data-settings-section="notifications" hidden>
     <div class="card-header">Notifications</div>
     <div class="card-body">
       <form method="post" action="/settings" class="row g-3 align-items-end">
         <input type="hidden" name="timezone" value="{{ config.timezone }}">
         <input type="hidden" name="notifications_submitted" value="1">
         <div class="col-md-3">
-          <label class="form-label" for="notifications_enabled">Notification Routing</label>
+          <label class="form-label" for="notifications_enabled">Notification Routing {{ help_tip("Master switch for all notification providers and event routing rules.") }}</label>
           <div class="form-switch-card">
             <input class="form-check-input" id="notifications_enabled"
                    name="notifications_enabled" type="checkbox"
@@ -183,7 +212,7 @@
           </div>
         </div>
         <div class="col-md-3">
-          <label class="form-label" for="telegram_enabled">Telegram</label>
+          <label class="form-label" for="telegram_enabled">Telegram {{ help_tip("Send selected scheduler events to a Telegram chat.") }}</label>
           <div class="form-switch-card">
             <input class="form-check-input" id="telegram_enabled"
                    name="telegram_enabled" type="checkbox"
@@ -203,7 +232,7 @@
                  value="{{ config.notifications.telegram.chat_id }}">
         </div>
         <div class="col-md-3">
-          <label class="form-label" for="email_enabled">Email / SMTP</label>
+          <label class="form-label" for="email_enabled">Email / SMTP {{ help_tip("Send selected scheduler events through an SMTP server.") }}</label>
           <div class="form-switch-card">
             <input class="form-check-input" id="email_enabled" name="email_enabled"
                    type="checkbox" {% if config.notifications.email.enabled %}checked{% endif %}>
@@ -251,7 +280,7 @@
           </div>
         </div>
         <div class="col-md-3">
-          <label class="form-label" for="webhook_enabled">Webhook</label>
+          <label class="form-label" for="webhook_enabled">Webhook {{ help_tip("POST selected scheduler events to an external automation endpoint.") }}</label>
           <div class="form-switch-card">
             <input class="form-check-input" id="webhook_enabled" name="webhook_enabled"
                    type="checkbox" {% if config.notifications.webhook.enabled %}checked{% endif %}>
@@ -270,7 +299,7 @@
         </div>
         <div class="col-12">
           <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
-            <h2 class="h5 mb-0">Routing Rules</h2>
+            <h2 class="h5 mb-0">Routing Rules {{ help_tip("Choose which event types are sent through which provider, including quiet hours and throttling.") }}</h2>
             <button class="btn btn-outline-secondary btn-sm" type="button" id="add-notification-rule">
               Add Rule
             </button>
@@ -360,7 +389,7 @@
       {% endif %}
     </div>
   </div>
-  <div class="card mb-3">
+  <div class="card mb-3" data-settings-section="metadata" hidden>
     <div class="card-header">Public EPG Metadata</div>
     <div class="card-body">
       <div class="alert alert-info">
@@ -369,7 +398,7 @@
         If your account allows higher throughput, increase the per-minute limit here.
       </div>
       {% if metadata_provider_status and metadata_provider_status.providers.jellystat %}
-      <div class="alert alert-secondary">
+      <div class="settings-status-panel">
         <div class="fw-semibold">Last Jellystat refresh</div>
         <div class="small text-secondary">{{ metadata_provider_status.created_at }}</div>
         <div class="d-flex flex-wrap gap-2 mt-2">
@@ -394,7 +423,7 @@
         </div>
         {% endif %}
         <div class="col-md-3">
-          <label class="form-label" for="metadata_tmdb_enabled">TMDB Enrichment</label>
+          <label class="form-label" for="metadata_tmdb_enabled">TMDB Enrichment {{ help_tip("Uses TMDB as a fallback source for public EPG artwork and descriptions.") }}</label>
           <div class="form-switch-card">
             <input class="form-check-input" id="metadata_tmdb_enabled"
                    name="metadata_tmdb_enabled" type="checkbox"
@@ -422,7 +451,7 @@
           <div class="form-text">Default is intentionally below TMDB's documented upper range.</div>
         </div>
         <div class="col-md-3">
-          <label class="form-label" for="metadata_tvdb_enabled">TVDB</label>
+          <label class="form-label" for="metadata_tvdb_enabled">TVDB {{ help_tip("Uses TVDB metadata when available for series-oriented public EPG details.") }}</label>
           <div class="form-switch-card">
             <input class="form-check-input" id="metadata_tvdb_enabled"
                    name="metadata_tvdb_enabled" type="checkbox"
@@ -444,7 +473,7 @@
           <div class="form-text">Use your licensed TVDB tier as the ceiling.</div>
         </div>
         <div class="col-md-3">
-          <label class="form-label" for="metadata_omdb_enabled">OMDb</label>
+          <label class="form-label" for="metadata_omdb_enabled">OMDb {{ help_tip("Uses OMDb as an additional metadata source for movie and series identifiers.") }}</label>
           <div class="form-switch-card">
             <input class="form-check-input" id="metadata_omdb_enabled"
                    name="metadata_omdb_enabled" type="checkbox"
@@ -466,7 +495,7 @@
           <div class="form-text">Adjust if your OMDb key allows higher throughput.</div>
         </div>
         <div class="col-md-3">
-          <label class="form-label" for="metadata_jellystat_enabled">Jellystat Signals</label>
+          <label class="form-label" for="metadata_jellystat_enabled">Jellystat Signals {{ help_tip("Adds Jellystat viewing activity, trends, and underused-content signals to recommendations.") }}</label>
           <div class="form-switch-card">
             <input class="form-check-input" id="metadata_jellystat_enabled"
                    name="metadata_jellystat_enabled" type="checkbox"
@@ -554,7 +583,7 @@
     </div>
   </div>
   {% if metadata_audit %}
-  <div class="card mb-3">
+  <div class="card mb-3" data-settings-section="metadata" hidden>
     <div class="card-header">Metadata Coverage</div>
     <div class="card-body">
       <p class="text-secondary">{{ metadata_audit.total }} movie/series records found in the local media cache.</p>
@@ -579,29 +608,51 @@
     </div>
   </div>
   {% endif %}
-  <div class="row">
-    <div class="col-md-6">
-      <div class="card mb-3">
-        <div class="card-header">Jellyfin</div>
-        <div class="card-body">
-          <p><strong>URL:</strong> {{ config.jellyfin.url }}</p>
-          <p><strong>User ID:</strong> {{ config.jellyfin.user_id[:16] if config.jellyfin.user_id else "Not set" }}...</p>
+  <div class="card mb-3" data-settings-section="integrations" hidden>
+    <div class="card-header">Jellyfin / Tunarr Connections</div>
+    <div class="card-body">
+      <form method="post" action="/settings" class="row g-3 align-items-end">
+        <input type="hidden" name="timezone" value="{{ config.timezone }}">
+        <input type="hidden" name="connections_submitted" value="1">
+        <div class="col-md-5">
+          <label class="form-label" for="jellyfin_url">Jellyfin URL {{ help_tip("Base URL used for read-only media sync and Jellyfin-login public EPG access.") }}</label>
+          <input class="form-control" id="jellyfin_url" name="jellyfin_url"
+                 value="{{ config.jellyfin.url }}" placeholder="http://jellyfin:8096" required>
         </div>
-      </div>
-    </div>
-    <div class="col-md-6">
-      <div class="card mb-3">
-        <div class="card-header">Tunarr</div>
-        <div class="card-body">
-          <p><strong>URL:</strong> {{ config.tunarr.url }}</p>
+        <div class="col-md-4">
+          <label class="form-label" for="jellyfin_api_key">Jellyfin API Key {{ help_tip("Read-only API key used to discover media. The scheduler never modifies Jellyfin.") }}</label>
+          <input class="form-control" id="jellyfin_api_key" name="jellyfin_api_key"
+                 type="password" value="{{ config.jellyfin.api_key }}" autocomplete="off" required>
         </div>
-      </div>
+        <div class="col-md-3">
+          <label class="form-label" for="jellyfin_user_id">Jellyfin User ID {{ help_tip("User context used when Jellyfin requires user-scoped media access.") }}</label>
+          <input class="form-control" id="jellyfin_user_id" name="jellyfin_user_id"
+                 value="{{ config.jellyfin.user_id }}" required>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" for="jellyfin_sync_interval_minutes">Sync Interval {{ help_tip("Default interval, in minutes, for background Jellyfin media refreshes.") }}</label>
+          <input class="form-control" id="jellyfin_sync_interval_minutes"
+                 name="jellyfin_sync_interval_minutes" type="number" min="1"
+                 value="{{ config.jellyfin.sync_interval_minutes }}">
+        </div>
+        <div class="col-md-5">
+          <label class="form-label" for="tunarr_url">Tunarr URL {{ help_tip("Base URL used for channel sync, schedule upload, and Tunarr API compatibility checks.") }}</label>
+          <input class="form-control" id="tunarr_url" name="tunarr_url"
+                 value="{{ config.tunarr.url }}" placeholder="http://tunarr:8000" required>
+        </div>
+        <div class="col-md-auto">
+          <button class="btn btn-gold" type="submit">Save Connections</button>
+        </div>
+        <div class="col-12">
+          <div class="form-text">Jellyfin access is read-only. Tunarr is modified only when schedules are explicitly uploaded.</div>
+        </div>
+      </form>
     </div>
   </div>
-  <div class="card mb-3">
+  <div class="card mb-3" data-settings-section="integrations" hidden>
     <div class="card-header">Channels</div>
     <div class="card-body">
-      <p>{{ config.channels|length }} channels configured</p>
+      <p>{{ config.channels|length }} channels configured {{ help_tip("Refreshes local channel configuration from Tunarr without changing Jellyfin.") }}</p>
       <button class="btn btn-gold"
               hx-post="/api/channels/sync"
               hx-target="#sync-result"
@@ -611,7 +662,7 @@
       <div id="sync-result" class="mt-2"></div>
     </div>
   </div>
-  <div class="card mb-3">
+  <div class="card mb-3" data-settings-section="integrations" hidden>
     <div class="card-header">Media</div>
     <div class="card-body">
       <button class="btn btn-gold"
@@ -675,6 +726,44 @@
 <script src="https://unpkg.com/htmx.org@1.9.12"></script>
 <script>
 (() => {
+  const tabButtons = Array.from(document.querySelectorAll("[data-settings-tab]"));
+  const panels = Array.from(document.querySelectorAll("[data-settings-section]"));
+  const intros = Array.from(document.querySelectorAll("[data-settings-intro]"));
+
+  function activateSettingsTab(section) {
+    const activeSection = tabButtons.some((button) => button.dataset.settingsTab === section)
+      ? section
+      : "general";
+    tabButtons.forEach((button) => {
+      const isActive = button.dataset.settingsTab === activeSection;
+      button.classList.toggle("active", isActive);
+      button.setAttribute("aria-selected", isActive ? "true" : "false");
+    });
+    panels.forEach((panel) => {
+      panel.hidden = panel.dataset.settingsSection !== activeSection;
+    });
+    intros.forEach((intro) => {
+      intro.hidden = intro.dataset.settingsIntro !== activeSection;
+    });
+  }
+
+  tabButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      const section = button.dataset.settingsTab || "general";
+      activateSettingsTab(section);
+      if (history.replaceState) {
+        history.replaceState(null, "", `#settings-${section}`);
+      }
+    });
+  });
+
+  const initialSection = window.location.hash.replace("#settings-", "") || "general";
+  activateSettingsTab(initialSection);
+
+  document.querySelectorAll("[data-bs-toggle='tooltip']").forEach((element) => {
+    new bootstrap.Tooltip(element);
+  });
+
   const list = document.getElementById("notification-rule-list");
   const template = document.getElementById("notification-rule-template");
   const addButton = document.getElementById("add-notification-rule");
