@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 from collections import Counter
+from html import escape
 from typing import Any
 
 import httpx
@@ -372,6 +373,7 @@ async def upload_schedule(request: Request, channel_id: str, version: int) -> HT
         )
     except httpx.HTTPStatusError as e:
         detail = e.response.text.strip() or e.response.reason_phrase
+        public_detail = _public_upload_error(e.response.status_code)
         await core.state.record_upload_attempt(
             channel_id,
             version,
@@ -384,7 +386,7 @@ async def upload_schedule(request: Request, channel_id: str, version: int) -> HT
             await core.notification_router.send(NotificationMessage(
                 event_type="upload_failed",
                 title=f"Upload failed for {channel.name or channel_id}",
-                message=f"Tunarr rejected schedule version {version}: {detail}",
+                message=f"Tunarr rejected schedule version {version}: {public_detail}",
                 severity="danger",
                 channel_id=channel_id,
                 details={"version": version, "status_code": e.response.status_code},
@@ -400,9 +402,10 @@ async def upload_schedule(request: Request, channel_id: str, version: int) -> HT
             request,
             channel,
             "danger",
-            f"Tunarr rejected upload ({e.response.status_code}): {detail}",
+            public_detail,
         )
     except httpx.HTTPError as e:
+        public_detail = "Tunarr upload failed. Check upload history or server logs for details."
         await core.state.record_upload_attempt(
             channel_id,
             version,
@@ -415,7 +418,7 @@ async def upload_schedule(request: Request, channel_id: str, version: int) -> HT
             await core.notification_router.send(NotificationMessage(
                 event_type="upload_failed",
                 title=f"Upload failed for {channel.name or channel_id}",
-                message=f"Tunarr upload failed for schedule version {version}: {e}",
+                message=f"Tunarr upload failed for schedule version {version}.",
                 severity="danger",
                 channel_id=channel_id,
                 details={"version": version, "error": str(e)},
@@ -426,7 +429,7 @@ async def upload_schedule(request: Request, channel_id: str, version: int) -> HT
             version,
             e,
         )
-        return await _action_result(request, channel, "danger", f"Tunarr upload failed: {e}")
+        return await _action_result(request, channel, "danger", public_detail)
     await core.state.set_schedule_status(channel_id, version, "uploaded")
     upload_details = upload_result.get("_upload", {})
     await core.state.record_upload_attempt(
@@ -463,13 +466,22 @@ def _find_channel(core: Any, channel_id: str) -> Any:
 
 
 def _notice(level: str, message: str, status_code: int = 200) -> HTMLResponse:
+    safe_level = escape(level, quote=True)
+    safe_message = escape(message)
     return HTMLResponse(
-        f'<div class="alert alert-{level} alert-dismissible fade show" role="alert">'
-        f'{message}'
+        f'<div class="alert alert-{safe_level} alert-dismissible fade show" role="alert">'
+        f'{safe_message}'
         '<button type="button" class="btn-close" data-bs-dismiss="alert" '
         'aria-label="Close"></button>'
         '</div>',
         status_code=status_code,
+    )
+
+
+def _public_upload_error(status_code: int) -> str:
+    return (
+        f"Tunarr rejected upload ({status_code}). "
+        "Check upload history or server logs for the upstream response."
     )
 
 

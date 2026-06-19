@@ -341,6 +341,7 @@ class TunarrClient:
     def __init__(self) -> None:
         self.uploads: list[tuple[str, dict]] = []
         self.fail_upload = False
+        self.fail_upload_text = "Not Found"
 
     async def get_custom_shows(self) -> list[dict[str, object]]:
         return [
@@ -360,7 +361,7 @@ class TunarrClient:
     async def upload_schedule(self, channel_id: str, schedule_data: dict) -> dict:
         if self.fail_upload:
             request = httpx.Request("POST", "http://tunarr.test/api/channels/ch1/schedule")
-            response = httpx.Response(404, text="Not Found", request=request)
+            response = httpx.Response(404, text=self.fail_upload_text, request=request)
             raise httpx.HTTPStatusError("Not Found", request=request, response=response)
         self.uploads.append((channel_id, schedule_data))
         return {"ok": True}
@@ -373,7 +374,7 @@ class TunarrClient:
     ) -> dict:
         if self.fail_upload:
             request = httpx.Request("POST", "http://tunarr.test/api/channels/ch1/programming")
-            response = httpx.Response(404, text="Not Found", request=request)
+            response = httpx.Response(404, text=self.fail_upload_text, request=request)
             raise httpx.HTTPStatusError("Not Found", request=request, response=response)
         self.uploads.append((channel_id, {"timeline": timeline, **kwargs}))
         return {
@@ -901,6 +902,49 @@ def test_public_epg_jellyfin_login_allows_public_guide(monkeypatch) -> None:
     assert "FlixWolf EPG" in response.text
 
 
+def test_public_epg_jellyfin_login_rejects_external_return_to(monkeypatch) -> None:
+    core = Core()
+    core.config_manager.config().public_access.epg = "jellyfin_login"
+
+    class FakeResponse:
+        status_code = 200
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, object]:
+            return {"User": {"Id": "jellyfin-user"}}
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs) -> None:
+            return None
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args) -> None:
+            return None
+
+        async def post(self, url: str, **kwargs) -> FakeResponse:
+            return FakeResponse()
+
+    monkeypatch.setattr(auth_routes.httpx, "AsyncClient", FakeAsyncClient)
+    client = TestClient(create_app(core))
+
+    login = client.post(
+        "/public/login",
+        data={
+            "username": "viewer",
+            "password": "secret",
+            "return_to": "https://evil.example/steal",
+        },
+        follow_redirects=False,
+    )
+
+    assert login.status_code == 303
+    assert login.headers["location"] == "/epg"
+
+
 def test_channel_health_dashboard_shows_status_and_links() -> None:
     core = Core()
     core.state.upload_attempts.append({
@@ -1186,6 +1230,25 @@ def test_channel_config_import_rejects_invalid_json() -> None:
     assert response.status_code == 303
     assert core.config_manager.config().channels[0].name == "Channel"
     assert "import_error=invalid" in response.headers["location"]
+    assert "https://evil.example" not in response.headers["location"]
+
+
+def test_channel_config_save_rejects_external_return_to() -> None:
+    core = Core()
+    client = make_client(core)
+
+    response = client.post(
+        "/channels/ch1/config",
+        data={
+            "name": "Channel",
+            "schedule_horizon_days": "1",
+            "return_to": "https://evil.example/phish",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/?saved_channel=ch1"
 
 
 def test_settings_save_metadata_config() -> None:
@@ -3549,10 +3612,25 @@ def test_upload_schedule_reports_tunarr_failure_inline() -> None:
     response = client.post("/schedules/ch1/2/upload")
 
     assert response.status_code == 200
-    assert "Tunarr rejected upload (404): Not Found" in response.text
+    assert "Tunarr rejected upload (404)." in response.text
     assert core.state.versions[("ch1", 2)]["status"] == "approved"
     assert core.state.upload_attempts[0]["status"] == "failed"
     assert "Tunarr rejected upload" in str(core.state.upload_attempts[0]["message"])
+    assert "Not Found" in str(core.state.upload_attempts[0]["message"])
+
+
+def test_upload_schedule_masks_upstream_error_body() -> None:
+    core = Core()
+    core.tunarr_client.fail_upload = True
+    core.tunarr_client.fail_upload_text = '<script>alert("x")</script>'
+    client = make_client(core)
+
+    response = client.post("/schedules/ch1/2/upload")
+
+    assert response.status_code == 200
+    assert "<script>" not in response.text
+    assert "Check upload history or server logs" in response.text
+    assert "<script>" in str(core.state.upload_attempts[0]["message"])
 
 
 def test_upload_history_page_lists_attempts() -> None:
