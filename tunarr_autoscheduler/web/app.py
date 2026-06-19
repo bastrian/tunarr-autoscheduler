@@ -15,8 +15,8 @@ from tunarr_autoscheduler.core.schedule_monitor import channel_schedule_statuses
 from tunarr_autoscheduler.core.timezones import format_datetime
 from tunarr_autoscheduler.integrations.jellyfin.client import JellyfinClient
 from tunarr_autoscheduler.integrations.tunarr.client import TunarrClient
-from tunarr_autoscheduler.web.routes.auth import router as auth_router
 from tunarr_autoscheduler.web.routes.audit import router as audit_router
+from tunarr_autoscheduler.web.routes.auth import router as auth_router
 from tunarr_autoscheduler.web.routes.channels import router as channels_router
 from tunarr_autoscheduler.web.routes.jobs import router as jobs_router
 from tunarr_autoscheduler.web.routes.playlists import router as playlists_router
