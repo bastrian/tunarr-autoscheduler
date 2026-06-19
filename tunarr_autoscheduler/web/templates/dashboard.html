@@ -10,8 +10,19 @@
 <body>
 {% set active_page = "dashboard" %}
 {% include "_nav.html" %}
-<main class="container pb-4">
-  <div class="page-header"><h1>Dashboard</h1></div>
+<main class="container pb-4 app-shell">
+  <div class="page-header page-header-balanced">
+    <div>
+      <div class="eyebrow">Control Center</div>
+      <h1>Dashboard</h1>
+      <p class="page-subtitle">Review channel health, pending schedules, and the next operational action.</p>
+    </div>
+    <div class="page-actions">
+      <a class="btn btn-outline-info" href="/channel-health">Health</a>
+      <a class="btn btn-outline-secondary" href="/uploads">Uploads</a>
+      <a class="btn btn-gold" href="/recommendations/builder">Build Schedule</a>
+    </div>
+  </div>
   <div id="notifications"></div>
   {% if saved_channel %}
   <div class="alert alert-success alert-dismissible fade show" role="alert">
@@ -19,102 +30,90 @@
     <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
   </div>
   {% endif %}
-  <div class="row">
+
+  <section class="dashboard-grid" aria-label="Channels">
     {% for channel in channels %}
-    <div class="col-md-6 col-lg-4 mb-3">
-      <div class="card">
-        <div class="card-header d-flex justify-content-between align-items-center">
-          <span>{{ channel.name }}</span>
-          {% if channel.scheduling_enabled %}
-            <span id="channel-status-{{ channel.id }}" class="badge badge-enabled">Enabled</span>
+    {% set schedule_status = (schedule_statuses|default({})).get(channel.id, {}) %}
+    {% set job = active_jobs.get(channel.id) %}
+    <article class="channel-card">
+      <header class="channel-card-head">
+        <div>
+          <h2>{{ channel.name }}</h2>
+          <div class="channel-card-meta">{{ channel.dayparts|length }} dayparts · {{ channel.rotations|length }} rotations</div>
+        </div>
+        {% if channel.scheduling_enabled %}
+          <span id="channel-status-{{ channel.id }}" class="status-pill status-success">Enabled</span>
+        {% else %}
+          <span id="channel-status-{{ channel.id }}" class="status-pill status-muted">Disabled</span>
+        {% endif %}
+      </header>
+
+      <div class="channel-status-grid">
+        <div class="status-tile">
+          <span>Uploaded</span>
+          <strong>{% if schedule_status.uploaded_version %}v{{ schedule_status.uploaded_version }}{% else %}None{% endif %}</strong>
+        </div>
+        <div class="status-tile">
+          <span>Ends</span>
+          <strong>{% if schedule_status.planned_end %}{{ schedule_status.planned_end|local_datetime(timezone) }}{% else %}-{% endif %}</strong>
+        </div>
+        <div class="status-tile">
+          <span>Follow-up</span>
+          {% if schedule_status.has_follow_up %}
+            <strong class="text-success">Ready</strong>
+          {% elif schedule_status.expiring %}
+            <strong class="text-warning">Missing</strong>
           {% else %}
-            <span id="channel-status-{{ channel.id }}" class="badge badge-disabled">Disabled</span>
+            <strong>Open</strong>
           {% endif %}
         </div>
-        <div class="card-body">
-          <p class="mb-2"><strong>Dayparts:</strong> {{ channel.dayparts|length }}</p>
-          <p class="mb-2"><strong>Rotations:</strong> {{ channel.rotations|length }}</p>
-          {% set schedule_status = (schedule_statuses|default({})).get(channel.id, {}) %}
-          <div class="schedule-health-strip mb-3">
-            <div>
-              <span class="text-secondary">Uploaded</span>
-              <strong>
-                {% if schedule_status.uploaded_version %}
-                  v{{ schedule_status.uploaded_version }}
-                {% else %}
-                  none
-                {% endif %}
-              </strong>
-            </div>
-            <div>
-              <span class="text-secondary">Ends</span>
-              <strong>
-                {% if schedule_status.planned_end %}
-                  {{ schedule_status.planned_end|local_datetime(timezone) }}
-                {% else %}
-                  -
-                {% endif %}
-              </strong>
-            </div>
-            <div>
-              <span class="text-secondary">Follow-up</span>
-              {% if schedule_status.has_follow_up %}
-                <span class="badge badge-enabled">Ready</span>
-              {% elif schedule_status.expiring %}
-                <span class="badge badge-warning">Missing</span>
-              {% else %}
-                <span class="badge badge-secondary">Open</span>
-              {% endif %}
-            </div>
-            <div>
-              <span class="text-secondary">Auto</span>
-              {% if channel.automatic_follow_up.enabled %}
-                <span class="badge badge-enabled">On</span>
-              {% else %}
-                <span class="badge badge-disabled">Off</span>
-              {% endif %}
-            </div>
-          </div>
-          {% if schedule_status.invalid_count %}
-          <p class="small text-warning mb-2">{{ schedule_status.invalid_count }} invalid draft(s) need attention.</p>
-          {% endif %}
-          {% if schedule_status.latest_upload %}
-          <p class="small text-secondary mb-2">
-            Latest upload: {{ schedule_status.latest_upload.status }}
-            {% if schedule_status.latest_upload.schedule_version %}
-              v{{ schedule_status.latest_upload.schedule_version }}
-            {% endif %}
-          </p>
-          {% endif %}
-          {% set job = active_jobs.get(channel.id) %}
-          <div id="job-status-{{ channel.id }}"
-               hx-get="/channels/{{ channel.id }}/job-status"
-               hx-trigger="load, every 3s"
-               hx-swap="outerHTML">
-            {% if job %}
-              <span class="badge badge-running">Running</span>
-              <span class="small ms-2">Stage: {{ job.current_stage }}</span>
-            {% else %}
-              <span class="small text-secondary">Checking generation status...</span>
-            {% endif %}
-          </div>
-          <div class="action-bar mt-3">
-            <a href="/channels/{{ channel.id }}" class="btn btn-sm btn-gold">View</a>
-            <a href="/channels/{{ channel.id }}/config?return_to=/" class="btn btn-sm btn-outline-light">Edit</a>
-            <button id="channel-toggle-{{ channel.id }}" type="button" class="btn btn-sm btn-outline-secondary"
-               hx-post="/channels/{{ channel.id }}/toggle" hx-target="#notifications" hx-swap="innerHTML">
-              {% if channel.scheduling_enabled %}Disable{% else %}Enable{% endif %}
-            </button>
-            <button type="button" class="btn btn-sm btn-outline-info"
-               hx-post="/channels/{{ channel.id }}/generate" hx-target="#notifications" hx-swap="innerHTML">
-              Generate
-            </button>
-          </div>
+        <div class="status-tile">
+          <span>Automation</span>
+          {% if channel.automatic_follow_up.enabled %}<strong class="text-success">On</strong>{% else %}<strong class="text-secondary">Off</strong>{% endif %}
         </div>
       </div>
+
+      <div class="channel-card-notes">
+        {% if schedule_status.invalid_count %}
+        <div class="mini-alert mini-alert-warning">{{ schedule_status.invalid_count }} invalid draft(s) need attention.</div>
+        {% endif %}
+        {% if schedule_status.latest_upload %}
+        <div class="mini-alert">Latest upload: {{ schedule_status.latest_upload.status }}{% if schedule_status.latest_upload.schedule_version %} v{{ schedule_status.latest_upload.schedule_version }}{% endif %}</div>
+        {% endif %}
+        <div id="job-status-{{ channel.id }}"
+             hx-get="/channels/{{ channel.id }}/job-status"
+             hx-trigger="load, every 3s"
+             hx-swap="outerHTML">
+          {% if job %}
+            <span class="status-pill status-running">Running</span>
+            <span class="small ms-2">Stage: {{ job.current_stage }}</span>
+          {% else %}
+            <span class="small text-secondary">No active generation.</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <footer class="channel-card-actions">
+        <a href="/channels/{{ channel.id }}" class="btn btn-sm btn-gold">Open</a>
+        <a href="/channels/{{ channel.id }}/config?return_to=/" class="btn btn-sm btn-outline-light">Configure</a>
+        <button id="channel-toggle-{{ channel.id }}" type="button" class="btn btn-sm btn-outline-secondary"
+           hx-post="/channels/{{ channel.id }}/toggle" hx-target="#notifications" hx-swap="innerHTML">
+          {% if channel.scheduling_enabled %}Disable{% else %}Enable{% endif %}
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-info"
+           hx-post="/channels/{{ channel.id }}/generate" hx-target="#notifications" hx-swap="innerHTML">
+          Generate
+        </button>
+      </footer>
+    </article>
+    {% else %}
+    <div class="empty-state">
+      <h2>No channels configured</h2>
+      <p>Sync channels from Tunarr in Settings to start building schedules.</p>
+      <a class="btn btn-gold" href="/settings#settings-integrations">Open Integrations</a>
     </div>
     {% endfor %}
-  </div>
+  </section>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://unpkg.com/htmx.org@1.9.12"></script>

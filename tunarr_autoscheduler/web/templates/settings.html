@@ -13,8 +13,14 @@
 {%- endmacro %}
 {% set active_page = "settings" %}
 {% include "_nav.html" %}
-<main class="container pb-4">
-  <div class="page-header"><h1>Settings</h1></div>
+<main class="container pb-4 app-shell settings-shell">
+  <div class="page-header page-header-balanced">
+    <div>
+      <div class="eyebrow">System Configuration</div>
+      <h1>Settings</h1>
+      <p class="page-subtitle">Configure access, integrations, notifications, backups, and metadata providers.</p>
+    </div>
+  </div>
   {% if request.query_params.get("saved") == "1" %}
   <div class="alert alert-success">Settings saved.</div>
   {% endif %}
@@ -62,7 +68,7 @@
   <div class="settings-tab-intro" data-settings-intro="metadata" hidden>
     Public EPG enrichment, external provider limits, and coverage diagnostics.
   </div>
-  <div class="card mb-3" data-settings-section="general">
+  <div class="card mb-3 calm-card" data-settings-section="general">
     <div class="card-header">Application</div>
     <div class="card-body">
       <form method="post" action="/settings" class="row g-3 align-items-end">
@@ -80,7 +86,7 @@
       </form>
     </div>
   </div>
-  <div class="card mb-3" data-settings-section="access" hidden>
+  <div class="card mb-3 calm-card" data-settings-section="access" hidden>
     <div class="card-header">Admin Login</div>
     <div class="card-body">
       <form method="post" action="/settings" class="row g-3 align-items-end">
@@ -114,7 +120,7 @@
       </form>
     </div>
   </div>
-  <div class="card mb-3" data-settings-section="operations" hidden>
+  <div class="card mb-3 calm-card" data-settings-section="operations" hidden>
     <div class="card-header">Automated Backups</div>
     <div class="card-body">
       <form method="post" action="/settings" class="row g-3 align-items-end">
@@ -213,7 +219,7 @@
       </div>
     </div>
   </div>
-  <div class="card mb-3" data-settings-section="general">
+  <div class="card mb-3 calm-card" data-settings-section="general">
     <div class="card-header">Public Access</div>
     <div class="card-body">
       <form method="post" action="/settings" class="row g-3 align-items-end">
@@ -236,7 +242,7 @@
       </form>
     </div>
   </div>
-  <div class="card mb-3" data-settings-section="notifications" hidden>
+  <div class="card mb-3 calm-card" data-settings-section="notifications" hidden>
     <div class="card-header">Notifications</div>
     <div class="card-body">
       <form method="post" action="/settings" class="row g-3 align-items-end">
@@ -435,7 +441,7 @@
       {% endif %}
     </div>
   </div>
-  <div class="card mb-3" data-settings-section="metadata" hidden>
+  <div class="card mb-3 calm-card" data-settings-section="metadata" hidden>
     <div class="card-header">Public EPG Metadata</div>
     <div class="card-body">
       <div class="alert alert-info">
@@ -632,7 +638,7 @@
     </div>
   </div>
   {% if metadata_audit %}
-  <div class="card mb-3" data-settings-section="metadata" hidden>
+  <div class="card mb-3 calm-card" data-settings-section="metadata" hidden>
     <div class="card-header">Metadata Coverage</div>
     <div class="card-body">
       <p class="text-secondary">{{ metadata_audit.total }} movie/series records found in the local media cache.</p>
@@ -657,7 +663,7 @@
     </div>
   </div>
   {% endif %}
-  <div class="card mb-3" data-settings-section="integrations" hidden>
+  <div class="card mb-3 calm-card" data-settings-section="integrations" hidden>
     <div class="card-header">Jellyfin / Tunarr Connections</div>
     <div class="card-body">
       <form method="post" action="/settings" class="row g-3 align-items-end">
@@ -701,7 +707,7 @@
       </form>
     </div>
   </div>
-  <div class="card mb-3" data-settings-section="integrations" hidden>
+  <div class="card mb-3 calm-card" data-settings-section="integrations" hidden>
     <div class="card-header">Channels</div>
     <div class="card-body">
       <p>{{ config.channels|length }} channels configured {{ help_tip("Refreshes local channel configuration from Tunarr without changing Jellyfin.") }}</p>
@@ -714,7 +720,7 @@
       <div id="sync-result" class="mt-2"></div>
     </div>
   </div>
-  <div class="card mb-3" data-settings-section="integrations" hidden>
+  <div class="card mb-3 calm-card" data-settings-section="integrations" hidden>
     <div class="card-header">Media</div>
     <div class="card-body">
       <button class="btn btn-gold"

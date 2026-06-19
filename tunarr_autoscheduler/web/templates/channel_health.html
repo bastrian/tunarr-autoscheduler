@@ -10,8 +10,8 @@
 <body>
 {% set active_page = "health" %}
 {% include "_nav.html" %}
-<main class="container pb-4">
-  <div class="page-header d-flex justify-content-between align-items-center gap-3">
+<main class="container pb-4 app-shell">
+  <div class="page-header page-header-balanced">
     <h1>Channel Health</h1>
     <div class="action-bar">
       <form method="post" action="/diagnostics/bundle">
@@ -23,7 +23,7 @@
 
   <div class="health-summary-grid mb-3">
     {% for key, ok in connectivity.items() %}
-    <div class="card">
+    <div class="card calm-card">
       <div class="card-body">
         <span class="text-secondary">{{ key|capitalize }}</span>
         <strong class="d-block mt-1">
@@ -36,7 +36,7 @@
     {% endfor %}
   </div>
 
-  <div class="card">
+  <div class="card calm-card">
     <div class="table-responsive">
       <table class="table table-hover align-middle mb-0 channel-health-table">
         <thead>

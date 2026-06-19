@@ -10,12 +10,22 @@
 <body>
 {% set active_page = "dashboard" %}
 {% include "_nav.html" %}
-<main class="container pb-4">
-  <div class="page-header"><h1>{{ channel.name }}</h1></div>
+<main class="container pb-4 app-shell">
+  <div class="page-header page-header-balanced">
+    <div>
+      <div class="eyebrow">Channel Workspace</div>
+      <h1>{{ channel.name }}</h1>
+      <p class="page-subtitle">Generate schedules, review pending versions, and monitor this channel.</p>
+    </div>
+    <div class="page-actions">
+      <a href="/schedules/{{ channel.id }}" class="btn btn-outline-info">Schedule History</a>
+      <a href="/channels/{{ channel.id }}/config?return_to=/channels/{{ channel.id }}" class="btn btn-outline-light">Configure</a>
+    </div>
+  </div>
   <div id="notifications"></div>
   <div class="row">
     <div class="col-md-6">
-      <div class="card mb-3">
+      <div class="card mb-3 calm-card">
         <div class="card-header">Dayparts</div>
         <div class="card-body">
           <table class="table table-dark table-sm">
@@ -35,7 +45,7 @@
       </div>
     </div>
     <div class="col-md-6">
-      <div class="card mb-3">
+      <div class="card mb-3 calm-card">
         <div class="card-header">Rotations</div>
         <div class="card-body">
           {% for rot in channel.rotations %}
@@ -59,7 +69,7 @@
   </div>
   <div class="row g-3 mb-3" id="schedule-health">
     <div class="col-md-6">
-      <div class="card h-100">
+      <div class="card h-100 calm-card">
         <div class="card-header">Waiting for Approval</div>
         <div class="card-body">
           {% if pending_version %}
@@ -81,7 +91,7 @@
       </div>
     </div>
     <div class="col-md-6">
-      <div class="card h-100">
+      <div class="card h-100 calm-card">
         <div class="card-header">Currently Uploaded</div>
         <div class="card-body">
           {% if active_version %}
@@ -124,8 +134,7 @@
         Follow-up Schedule
       </button>
     </div>
-    <a href="/schedules/{{ channel.id }}" class="btn btn-outline-info">Schedule History</a>
-    <a href="/channels/{{ channel.id }}/config?return_to=/channels/{{ channel.id }}" class="btn btn-outline-light">Edit Config</a>
+    
   </div>
   {% if follow_up_context %}
   <div class="followup-hint mb-3">
