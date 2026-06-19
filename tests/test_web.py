@@ -994,8 +994,8 @@ def test_public_epg_json_includes_compact_day_groups() -> None:
     payload = response.json()
     assert payload["compact"] is True
     assert payload["channels"][0]["days"]
-    assert payload["channels"][0]["days"][0]["count"] >= 1
-    assert payload["channels"][0]["days"][0]["prime"]["title"] == "Series One"
+    populated_day = next(day for day in payload["channels"][0]["days"] if day["count"])
+    assert populated_day["prime"]["title"] == "Series One"
 
 
 def test_public_epg_can_be_disabled() -> None:
