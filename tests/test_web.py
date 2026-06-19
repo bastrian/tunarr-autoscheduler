@@ -441,7 +441,12 @@ class MediaRepository:
                 source_id="episode-1",
                 title="Pilot",
                 duration_seconds=1800,
-                metadata={"series_id": "series-1", "series_name": "Series One"},
+                metadata={
+                    "series_id": "series-1",
+                    "series_name": "Series One",
+                    "genres": ["Sci-Fi"],
+                    "tags": ["space"],
+                },
             ),
             MediaCacheEntry(
                 id="movie-1",
@@ -450,7 +455,7 @@ class MediaRepository:
                 source_id="movie-1",
                 title="Movie One",
                 duration_seconds=5400,
-                metadata={"year": 2025},
+                metadata={"year": 2025, "genres": ["Sci-Fi"], "tags": ["space"]},
             ),
         ]
 
@@ -822,6 +827,50 @@ def test_public_epg_does_not_require_login_and_has_no_app_nav() -> None:
     assert "Week" in response.text
     assert "Dashboard" not in response.text
     assert "/channels/" not in response.text
+
+
+def test_public_epg_search_filters_programs_and_preserves_exports() -> None:
+    core = Core()
+    timeline = Timeline()
+    now = datetime.now(tz=UTC).replace(second=0, microsecond=0)
+    timeline.insert(EpisodeBlock(
+        start_time=now + timedelta(minutes=5),
+        end_time=now + timedelta(minutes=35),
+        duration=timedelta(minutes=30),
+        episode_id="episode-1",
+        show_id="show-1",
+        season_number=1,
+        episode_number=1,
+        runtime_seconds=1800,
+        metadata={"title": "Pilot", "show_name": "Series One"},
+    ))
+    timeline.insert(EpisodeBlock(
+        start_time=now + timedelta(minutes=40),
+        end_time=now + timedelta(minutes=70),
+        duration=timedelta(minutes=30),
+        episode_id="episode-2",
+        show_id="show-1",
+        season_number=1,
+        episode_number=2,
+        runtime_seconds=1800,
+        metadata={
+            "title": "Second",
+            "show_name": "Series One",
+            "overview": "A sci-fi follow-up.",
+            "genres": ["Sci-Fi"],
+        },
+    ))
+    core.state.versions[("ch1", 3)]["timeline_json"] = json.dumps(timeline.snapshot())
+    client = TestClient(create_app(core))
+
+    response = client.get("/epg", params={"q": "sci-fi"})
+
+    assert response.status_code == 200
+    assert "Second" in response.text
+    assert "Pilot" not in response.text
+    assert 'name="q" value="sci-fi"' in response.text
+    assert "/public/epg.json" in response.text
+    assert "q=sci-fi" in response.text
 
 
 def test_public_epg_can_be_disabled() -> None:
@@ -2212,6 +2261,72 @@ def test_recommendations_page_filters_and_updates_existing_playlist() -> None:
     assert playlist.tags == ["recommended"]
     assert [(item.media_type, item.media_id) for item in playlist.items] == [
         ("movie", "movie-1"),
+    ]
+
+
+def test_recommendations_can_suggest_similar_to_playlist_and_append_to_source() -> None:
+    core = Core()
+    now = datetime.now(tz=UTC)
+    core.playlist_repo.playlists["playlist-1"] = Playlist(
+        id="playlist-1",
+        name="Space Movies",
+        description="Sci-fi space source list",
+        channel_scope="ch1",
+        tags=["sci-fi", "space"],
+        items=[
+            PlaylistItem(
+                media_type="movie",
+                media_id="movie-1",
+                title="Movie One",
+                position=0,
+            ),
+        ],
+        created_at=now,
+        updated_at=now,
+    )
+    client = make_client(core)
+
+    page = client.get(
+        "/recommendations",
+        params={
+            "profile": "late-night-genre",
+            "source_playlist_id": "playlist-1",
+            "media_type": "series",
+            "min_score": "1",
+        },
+    )
+
+    assert page.status_code == 200
+    assert "Similarity source" in page.text
+    assert "Space Movies" in page.text
+    assert "Series One" in page.text
+    assert "Movie One" not in page.text
+    assert "similar to source playlist terms" in page.text
+
+    append = client.post(
+        "/recommendations/playlists",
+        data={
+            "profile": "late-night-genre",
+            "language_rule": "profile_default",
+            "limit": "50",
+            "media_type": "series",
+            "min_score": "1",
+            "source_playlist_id": "playlist-1",
+            "playlist_mode": "append",
+            "selected_keys": "series:series-1",
+            "name": "Space Movies",
+            "description": "Updated from similar recommendations",
+            "tags": "sci-fi, space",
+        },
+        follow_redirects=False,
+    )
+
+    assert append.status_code == 303
+    playlist = core.playlist_repo.playlists["playlist-1"]
+    assert playlist.description == "Updated from similar recommendations"
+    assert [(item.media_type, item.media_id) for item in playlist.items] == [
+        ("movie", "movie-1"),
+        ("series", "series-1"),
     ]
 
 

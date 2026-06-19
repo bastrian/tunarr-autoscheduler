@@ -39,6 +39,7 @@ async def public_epg(request: Request) -> HTMLResponse:
         channels=payload["channels"],
         channel_options=payload["channel_options"],
         selected_channel=payload["selected_channel"],
+        search_query=payload["search_query"],
         period=payload["period"],
         period_options=_period_options(str(payload["view"])),
         now=payload["now"],
@@ -116,6 +117,7 @@ async def _public_epg_payload(
     previous_date = selected_date - timedelta(days=7 if view == "week" else 1)
     next_date = selected_date + timedelta(days=7 if view == "week" else 1)
     selected_channel = str(request.query_params.get("channel", "")).strip()
+    search_query = str(request.query_params.get("q", "")).strip()
     public_base_url = str(request.base_url).rstrip("/") if absolute_images else ""
     metadata_cache: dict[str, dict[str, Any]] = {}
     rows_by_channel = {str(row["channel_id"]): row for row in rows}
@@ -138,6 +140,10 @@ async def _public_epg_payload(
         channel_id = channel.id
         row = rows_by_channel.get(channel_id)
         blocks: list[dict[str, Any]] = []
+        channel_matches_search = _search_matches(
+            search_query,
+            [channel.name or channel_id, channel_id],
+        )
         if row is not None:
             timeline = Timeline.from_snapshot(json.loads(str(row["timeline_json"])))
             for block in sorted(timeline.blocks, key=lambda item: item.start_time):
@@ -154,8 +160,14 @@ async def _public_epg_payload(
                     public_base_url=public_base_url,
                 )
                 await _enrich_epg_item(item, block, config.metadata, metadata_cache)
+                if search_query and not (
+                    channel_matches_search or _epg_item_matches_search(item, search_query)
+                ):
+                    continue
                 blocks.append(item)
             blocks = _merge_consecutive_epg_items(blocks, now)
+        if search_query and not blocks and not channel_matches_search:
+            continue
         channels.append({
             "id": channel_id,
             "name": channel.name or channel_id,
@@ -185,6 +197,7 @@ async def _public_epg_payload(
         "generated_at": now,
         "timezone": config.timezone,
         "selected_channel": selected_channel,
+        "search_query": search_query,
         "period": period,
         "view": view,
         "selected_date": selected_date,
@@ -216,6 +229,26 @@ def _selected_date(raw: str | None, fallback: date) -> date:
         return date.fromisoformat(raw)
     except ValueError:
         return fallback
+
+
+def _epg_item_matches_search(item: dict[str, Any], query: str) -> bool:
+    return _search_matches(query, [
+        item.get("title", ""),
+        item.get("subtitle", ""),
+        item.get("overview", ""),
+        item.get("kind", ""),
+        item.get("genres", ""),
+        item.get("year", ""),
+        *(link.get("label", "") for link in item.get("metadata_links", [])),
+    ])
+
+
+def _search_matches(query: str, values: list[object]) -> bool:
+    normalized_query = " ".join(query.lower().split())
+    if not normalized_query:
+        return True
+    haystack = " ".join(str(value).lower() for value in values if value)
+    return all(term in haystack for term in normalized_query.split(" "))
 
 
 def _window(

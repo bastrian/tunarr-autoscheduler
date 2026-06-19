@@ -931,21 +931,24 @@ textarea.form-control {
   color: #15120a;
 }
 
-.epg-channel-filter {
+.epg-channel-filter,
+.epg-search-filter {
   display: flex;
   align-items: center;
   gap: 0.55rem;
   margin: 0;
 }
 
-.epg-channel-filter label {
+.epg-channel-filter label,
+.epg-search-filter label {
   color: var(--muted);
   font-size: 0.76rem;
   font-weight: 850;
   text-transform: uppercase;
 }
 
-.epg-channel-filter select {
+.epg-channel-filter select,
+.epg-search-filter input {
   min-width: 13rem;
   padding: 0.45rem 0.7rem;
   border: 1px solid var(--border);
@@ -1257,12 +1260,14 @@ textarea.form-control {
     grid-template-columns: 1fr;
   }
 
-  .epg-channel-filter {
+  .epg-channel-filter,
+  .epg-search-filter {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .epg-channel-filter select {
+  .epg-channel-filter select,
+  .epg-search-filter input {
     width: 100%;
   }
 }
@@ -1614,7 +1619,9 @@ textarea.form-control {
   .epg-pager,
   .epg-period-strip,
   .epg-channel-filter,
-  .epg-channel-filter select {
+  .epg-search-filter,
+  .epg-channel-filter select,
+  .epg-search-filter input {
     max-width: 100%;
   }
 
