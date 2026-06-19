@@ -1,10 +1,8 @@
 {% for v in versions %}
 <tr id="schedule-version-{{ v.version }}">
   <td>
-    {% if v.status != "uploaded" %}
     <input class="form-check-input" type="checkbox" name="selected_versions" value="{{ v.version }}"
            aria-label="Select schedule version {{ v.version }}">
-    {% endif %}
   </td>
   <td>{{ v.version }}</td>
   <td>
@@ -59,13 +57,11 @@
             hx-target="#notifications" hx-swap="innerHTML"
             hx-disabled-elt="closest tr button"
             hx-confirm="Create a new draft by rolling back to schedule version {{ v.version }}?">Rollback</button>
-    {% if v.status != "uploaded" %}
     <button type="button" class="btn btn-sm btn-outline-danger"
             hx-delete="/schedules/{{ channel.id }}/{{ v.version }}"
             hx-target="#notifications" hx-swap="innerHTML"
             hx-disabled-elt="closest tr button"
             hx-confirm="Delete schedule version {{ v.version }}?">Delete</button>
-    {% endif %}
     </div>
   </td>
 </tr>
