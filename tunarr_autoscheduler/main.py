@@ -33,6 +33,7 @@ from tunarr_autoscheduler.core.schedule_monitor import ScheduleMonitorEngine, ch
 from tunarr_autoscheduler.core.state import StateManager
 from tunarr_autoscheduler.core.timeline import Timeline
 from tunarr_autoscheduler.db.database import Database
+from tunarr_autoscheduler.db.repositories.audit_repo import AuditLogRepository
 from tunarr_autoscheduler.db.repositories.media_repo import MediaRepository
 from tunarr_autoscheduler.db.repositories.playlist_repo import PlaylistRepository
 from tunarr_autoscheduler.db.repositories.recommendation_profile_repo import (
@@ -91,6 +92,7 @@ class Core:
         self.recommendation_run_repo: RecommendationRunRepository | None = None
         self.channel_sync_engine: ChannelSyncEngine | None = None
         self.notification_router: NotificationRouter | None = None
+        self.audit_repo: AuditLogRepository | None = None
         self.db: Database | None = None
 
 
@@ -135,6 +137,7 @@ async def run_scheduler() -> None:
     core.recommendation_profile_repo = RecommendationProfileRepository(core.db)
     core.recommendation_run_repo = RecommendationRunRepository(core.db)
     core.notification_router = NotificationRouter(config=config, db=core.db)
+    core.audit_repo = AuditLogRepository(core.db)
 
     core.plugin_loader = PluginLoader(
         plugin_dirs=[os.path.expanduser(d) for d in config.plugins.directories],

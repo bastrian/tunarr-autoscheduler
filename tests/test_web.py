@@ -478,6 +478,56 @@ class MediaRepository:
         ]
 
 
+class AuditRepository:
+    def __init__(self) -> None:
+        self.events: list[dict[str, object]] = []
+
+    async def record(
+        self,
+        action: str,
+        *,
+        actor: str = "admin",
+        source: str = "web",
+        status: str = "success",
+        channel_id: str = "",
+        schedule_version: int | None = None,
+        target_type: str = "",
+        target_id: str = "",
+        message: str = "",
+        details: dict[str, object] | None = None,
+    ) -> None:
+        self.events.insert(0, {
+            "id": f"audit-{len(self.events) + 1}",
+            "action": action,
+            "actor": actor,
+            "source": source,
+            "status": status,
+            "channel_id": channel_id,
+            "schedule_version": schedule_version,
+            "target_type": target_type,
+            "target_id": target_id,
+            "message": message,
+            "details": details or {},
+            "created_at": "2026-05-28T16:00:00+00:00",
+        })
+
+    async def list_events(
+        self,
+        *,
+        channel_id: str = "",
+        action: str = "",
+        status: str = "",
+        limit: int = 200,
+    ) -> list[dict[str, object]]:
+        events = [
+            event for event in self.events
+            if (not channel_id or event["channel_id"] == channel_id)
+            and (not action or event["action"] == action)
+            and (not status or event["status"] == status)
+        ]
+        return [dict(event) for event in events[:limit]]
+
+
 class PlaylistRepository:
     def __init__(self) -> None:
         self.playlists: dict[str, Playlist] = {}
@@ -692,6 +742,7 @@ class Core:
         self.playlist_repo = PlaylistRepository()
         self.recommendation_profile_repo = RecommendationProfileRepository()
         self.recommendation_run_repo = RecommendationRunRepository()
+        self.audit_repo = AuditRepository()
         self.channel_sync_engine = None
 
 
@@ -734,6 +785,51 @@ def make_client(core: Core) -> TestClient:
     )
     assert response.status_code == 200
     return client
+
+
+def test_audit_log_page_filters_events() -> None:
+    core = Core()
+    client = make_client(core)
+    core.audit_repo.events.append({
+        "id": "audit-1",
+        "action": "schedule.upload",
+        "actor": "admin",
+        "source": "web",
+        "status": "success",
+        "channel_id": "ch1",
+        "schedule_version": 3,
+        "target_type": "",
+        "target_id": "",
+        "message": "Uploaded schedule version 3",
+        "details": {"mode": "manual"},
+        "created_at": "2026-05-28T16:00:00+00:00",
+    })
+
+    response = client.get("/audit?action=schedule.upload&status=success")
+
+    assert response.status_code == 200
+    assert "Audit Log" in response.text
+    assert "schedule.upload" in response.text
+    assert "Uploaded schedule version 3" in response.text
+    assert "manual" in response.text
+
+
+def test_settings_update_records_audit_event() -> None:
+    core = Core()
+    client = make_client(core)
+
+    response = client.post(
+        "/settings",
+        data={
+            "timezone": "Europe/Berlin",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert core.audit_repo.events[0]["action"] == "settings.update"
+    assert core.audit_repo.events[0]["status"] == "success"
+    assert core.audit_repo.events[0]["target_type"] == "settings"
 
 
 def test_public_epg_does_not_require_login_and_has_no_app_nav() -> None:
@@ -871,6 +967,36 @@ def test_public_epg_search_filters_programs_and_preserves_exports() -> None:
     assert 'name="q" value="sci-fi"' in response.text
     assert "/public/epg.json" in response.text
     assert "q=sci-fi" in response.text
+
+
+def test_public_epg_compact_week_view_groups_days_and_preserves_exports() -> None:
+    core = Core()
+    client = TestClient(create_app(core))
+
+    response = client.get("/epg?view=week&compact=1&date=2026-05-28")
+
+    assert response.status_code == 200
+    assert "Compact guide by channel" in response.text
+    assert "Next 7 Days" in response.text
+    assert "epg-compact-week" in response.text
+    assert "epg-timeline" not in response.text
+    assert "compact=1" in response.text
+    assert "/public/epg.json?view=week" in response.text
+    assert "period=day" in response.text
+
+
+def test_public_epg_json_includes_compact_day_groups() -> None:
+    core = Core()
+    client = TestClient(create_app(core))
+
+    response = client.get("/public/epg.json?view=week&compact=1&date=2026-05-28")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["compact"] is True
+    assert payload["channels"][0]["days"]
+    populated_day = next(day for day in payload["channels"][0]["days"] if day["count"])
+    assert populated_day["prime"]["title"] == "Series One"
 
 
 def test_public_epg_can_be_disabled() -> None:
@@ -3704,6 +3830,9 @@ def test_upload_schedule_sends_approved_version_to_tunarr() -> None:
     assert "uploaded" in response.text
     assert core.state.upload_attempts[0]["status"] == "success"
     assert core.state.upload_attempts[0]["schedule_version"] == 2
+    assert core.audit_repo.events[0]["action"] == "schedule.upload"
+    assert core.audit_repo.events[0]["channel_id"] == "ch1"
+    assert core.audit_repo.events[0]["schedule_version"] == 2
 
 
 def test_upload_schedule_can_retry_uploaded_version() -> None:

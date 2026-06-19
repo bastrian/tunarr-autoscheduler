@@ -3,6 +3,7 @@ from __future__ import annotations
 import tempfile
 
 from tunarr_autoscheduler.db.database import Database
+from tunarr_autoscheduler.db.repositories.audit_repo import AuditLogRepository
 from tunarr_autoscheduler.db.schema import SCHEMA_VERSION, run_migrations
 
 
@@ -26,6 +27,7 @@ async def test_initial_schema_has_job_schedule_version_link() -> None:
             notification_columns = await db.fetch_all(
                 "PRAGMA table_info(notification_events)",
             )
+            audit_columns = await db.fetch_all("PRAGMA table_info(audit_log)")
         finally:
             await db.disconnect()
 
@@ -51,6 +53,9 @@ async def test_initial_schema_has_job_schedule_version_link() -> None:
     }
     assert {"event_type", "provider", "status", "details_json"} <= {
         column["name"] for column in notification_columns
+    }
+    assert {"action", "actor", "status", "details_json", "created_at"} <= {
+        column["name"] for column in audit_columns
     }
 
 
@@ -232,3 +237,49 @@ async def test_migration_adds_notification_events() -> None:
     assert {"event_type", "provider", "status", "title", "created_at"} <= {
         column["name"] for column in columns
     }
+
+
+async def test_migration_adds_audit_log() -> None:
+    with tempfile.NamedTemporaryFile(suffix=".db") as tmp:
+        db = Database(tmp.name)
+        await db.connect()
+        try:
+            await db.execute("CREATE TABLE schema_version (version INTEGER PRIMARY KEY)")
+            await db.execute("INSERT INTO schema_version (version) VALUES (9)")
+            await run_migrations(db)
+            row = await db.fetch_one("SELECT version FROM schema_version")
+            columns = await db.fetch_all("PRAGMA table_info(audit_log)")
+        finally:
+            await db.disconnect()
+
+    assert row is not None
+    assert row["version"] == SCHEMA_VERSION
+    assert {"action", "source", "channel_id", "schedule_version", "target_id"} <= {
+        column["name"] for column in columns
+    }
+
+
+async def test_audit_repository_redacts_sensitive_details() -> None:
+    with tempfile.NamedTemporaryFile(suffix=".db") as tmp:
+        db = Database(tmp.name)
+        await db.connect()
+        try:
+            await run_migrations(db)
+            repo = AuditLogRepository(db)
+            await repo.record(
+                "settings.update",
+                details={
+                    "metadata_tmdb_api_key": "tmdb-secret",
+                    "nested": {"smtp_password": "smtp-secret", "safe": "visible"},
+                    "tokens": [{"jellystat_token": "token-secret"}],
+                },
+            )
+            events = await repo.list_events(action="settings.update")
+        finally:
+            await db.disconnect()
+
+    assert len(events) == 1
+    assert events[0]["details"]["metadata_tmdb_api_key"] == "[redacted]"
+    assert events[0]["details"]["nested"]["smtp_password"] == "[redacted]"
+    assert events[0]["details"]["nested"]["safe"] == "visible"
+    assert events[0]["details"]["tokens"][0]["jellystat_token"] == "[redacted]"

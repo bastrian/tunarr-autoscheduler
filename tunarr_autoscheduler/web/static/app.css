@@ -693,6 +693,19 @@ textarea.form-control {
   color: var(--text);
 }
 
+.audit-details {
+  max-width: 34rem;
+  max-height: 16rem;
+  margin: 0.45rem 0 0;
+  padding: 0.65rem;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #0b0e12;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
 .preview-filter {
   width: auto;
   min-width: 9rem;
@@ -1609,6 +1622,130 @@ textarea.form-control {
 
 .epg-now-tick {
   position: static;
+}
+
+.epg-compact-week {
+  overflow: hidden;
+}
+
+.epg-compact-grid {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem;
+}
+
+.epg-compact-channel {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #121820;
+}
+
+.epg-compact-channel > header {
+  padding: 0.8rem 0.9rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.epg-compact-channel h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.epg-compact-channel h3 img {
+  max-width: 2.2rem;
+  max-height: 2.2rem;
+  object-fit: contain;
+}
+
+.epg-compact-days {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+  gap: 0.75rem;
+  padding: 0.9rem;
+}
+
+.epg-compact-day {
+  min-width: 0;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-left: 4px solid #495264;
+  border-radius: 8px;
+  background: #0e131a;
+}
+
+.epg-compact-day.is-live {
+  border-left-color: var(--accent);
+  background: #171406;
+}
+
+.epg-compact-date {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.65rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.epg-compact-date strong {
+  color: var(--text);
+}
+
+.epg-compact-prime {
+  display: grid;
+  grid-template-columns: 4.8rem minmax(0, 1fr);
+  gap: 0.65rem;
+  margin-bottom: 0.65rem;
+}
+
+.epg-compact-art {
+  min-height: 4.8rem;
+  border-radius: 6px;
+  background-color: #20252d;
+  background-position: center;
+  background-size: cover;
+}
+
+.epg-compact-prime h4 {
+  margin: 0.15rem 0;
+  font-size: 1rem;
+  line-height: 1.2;
+}
+
+.epg-compact-prime p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.epg-compact-list {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.epg-compact-list li {
+  display: grid;
+  grid-template-columns: 5.7rem minmax(0, 1fr);
+  gap: 0.45rem;
+  min-width: 0;
+  padding-top: 0.35rem;
+  border-top: 1px solid rgb(255 255 255 / 7%);
+  font-size: 0.82rem;
+}
+
+.epg-compact-list span {
+  color: var(--muted);
+}
+
+.epg-compact-list strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @media (max-width: 1100px) {

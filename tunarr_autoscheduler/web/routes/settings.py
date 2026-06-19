@@ -102,9 +102,12 @@ async def save_settings(request: Request) -> Response:
     current_config = core.config_manager.config()
     data = current_config.model_dump(mode="python")
     data["timezone"] = str(form.get("timezone", current_config.timezone)).strip()
+    submitted_sections: list[str] = []
     if "metadata_submitted" in form:
+        submitted_sections.append("metadata")
         data["metadata"] = _metadata_from_form(form, data.get("metadata") or {})
     if "backups_submitted" in form:
+        submitted_sections.append("backups")
         backups = dict(data.get("backups") or {})
         backups["enabled"] = form.get("backups_enabled") == "on"
         backups["interval_hours"] = _int_form(
@@ -128,6 +131,7 @@ async def save_settings(request: Request) -> Response:
         )
         data["backups"] = backups
     if "public_access_submitted" in form:
+        submitted_sections.append("public_access")
         public_access = dict(data.get("public_access") or {})
         requested_epg = str(form.get("public_epg_access", public_access.get("epg", "public")))
         public_access["epg"] = requested_epg if requested_epg in {
@@ -137,6 +141,7 @@ async def save_settings(request: Request) -> Response:
         } else "public"
         data["public_access"] = public_access
     if "connections_submitted" in form:
+        submitted_sections.append("connections")
         jellyfin = dict(data.get("jellyfin") or {})
         jellyfin["url"] = str(form.get("jellyfin_url", jellyfin.get("url", ""))).strip()
         jellyfin["api_key"] = str(
@@ -154,8 +159,16 @@ async def save_settings(request: Request) -> Response:
         tunarr["url"] = str(form.get("tunarr_url", tunarr.get("url", ""))).strip()
         data["tunarr"] = tunarr
     if "auth_submitted" in form:
+        submitted_sections.append("auth")
         auth_error = _auth_update_error(form, current_config)
         if auth_error:
+            await _audit(
+                core,
+                "settings.update",
+                status="failed",
+                message=auth_error,
+                details={"sections": submitted_sections},
+            )
             template = request.app.state.templates.get_template("settings.html")
             return HTMLResponse(
                 template.render(
@@ -172,6 +185,7 @@ async def save_settings(request: Request) -> Response:
         auth["password_hash"] = hash_password(str(form.get("auth_new_password", "")))
         data["auth"] = auth
     if "notifications_submitted" in form:
+        submitted_sections.append("notifications")
         notifications = dict(data.get("notifications") or {})
         notifications["enabled"] = form.get("notifications_enabled") == "on"
         notifications["telegram"] = {
@@ -197,6 +211,13 @@ async def save_settings(request: Request) -> Response:
         try:
             webhook_headers = _json_dict(str(form.get("webhook_headers_json", "{}")))
         except ValueError as e:
+            await _audit(
+                core,
+                "settings.update",
+                status="failed",
+                message=str(e),
+                details={"sections": submitted_sections},
+            )
             template = request.app.state.templates.get_template("settings.html")
             return HTMLResponse(
                 template.render(
@@ -218,6 +239,13 @@ async def save_settings(request: Request) -> Response:
     try:
         config = AppConfig.model_validate(data)
     except ValidationError as e:
+        await _audit(
+            core,
+            "settings.update",
+            status="failed",
+            message="Settings validation failed",
+            details={"sections": submitted_sections, "error": str(e)},
+        )
         template = request.app.state.templates.get_template("settings.html")
         return HTMLResponse(
             template.render(
@@ -230,6 +258,12 @@ async def save_settings(request: Request) -> Response:
             status_code=400,
         )
     core.config_manager.save(config)
+    await _audit(
+        core,
+        "settings.update",
+        message="Updated settings",
+        details={"sections": submitted_sections or ["general"]},
+    )
     if "auth_submitted" in form:
         response = RedirectResponse("/login?credentials_changed=1", status_code=303)
         response.delete_cookie("tunarr_session")
@@ -678,3 +712,26 @@ def _nonnegative_int_form(value: object, default: object) -> int:
     except ValueError:
         parsed = int(str(default))
     return max(0, parsed)
+
+
+async def _audit(
+    core: Any,
+    action: str,
+    *,
+    status: str = "success",
+    message: str = "",
+    details: dict[str, Any] | None = None,
+) -> None:
+    repo = getattr(core, "audit_repo", None)
+    if repo is None:
+        return
+    try:
+        await repo.record(
+            action,
+            status=status,
+            target_type="settings",
+            message=message,
+            details=details,
+        )
+    except Exception:
+        return

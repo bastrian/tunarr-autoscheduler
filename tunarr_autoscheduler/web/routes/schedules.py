@@ -166,6 +166,13 @@ async def approve_schedule(request: Request, channel_id: str, version: int) -> H
         )
 
     await core.state.approve_version(channel_id, version)
+    await _audit(
+        core,
+        "schedule.approve",
+        channel_id=channel_id,
+        schedule_version=version,
+        message=f"Approved schedule version {version}",
+    )
     logger.info("Approved schedule version channel_id=%s version=%s", channel_id, version)
     return await _action_result(
         request, channel, "success", f"Approved schedule version {version}.",
@@ -194,6 +201,13 @@ async def reject_schedule(request: Request, channel_id: str, version: int) -> HT
         )
 
     await core.state.set_schedule_status(channel_id, version, "rejected")
+    await _audit(
+        core,
+        "schedule.reject",
+        channel_id=channel_id,
+        schedule_version=version,
+        message=f"Rejected schedule version {version}",
+    )
     logger.info("Rejected schedule version channel_id=%s version=%s", channel_id, version)
     return await _action_result(
         request, channel, "success", f"Rejected schedule version {version}.",
@@ -212,6 +226,15 @@ async def rollback_schedule(request: Request, channel_id: str, version: int) -> 
         return await _action_result(
             request, channel, "danger", "Schedule version not found.", status_code=404,
         )
+    await _audit(
+        core,
+        "schedule.rollback",
+        channel_id=channel_id,
+        schedule_version=version,
+        target_type="schedule_version",
+        target_id=str(new_version),
+        message=f"Rolled back to draft version {new_version}",
+    )
     logger.info(
         "Rolled back schedule version channel_id=%s source_version=%s new_version=%s",
         channel_id,
@@ -243,6 +266,14 @@ async def bulk_delete_schedules(request: Request, channel_id: str) -> HTMLRespon
         include_uploaded=True,
     )
     deleted = int(result.get("deleted", 0))
+    await _audit(
+        core,
+        "schedule.bulk_delete",
+        status="success" if deleted else "warning",
+        channel_id=channel_id,
+        message=f"Deleted {deleted} schedule version(s)",
+        details={"requested_versions": versions, "result": result},
+    )
     logger.info(
         "Bulk deleted schedule versions channel_id=%s requested=%s deleted=%s skipped=%s",
         channel_id,
@@ -282,6 +313,19 @@ async def cleanup_schedules(request: Request, channel_id: str) -> HTMLResponse:
         statuses=statuses,
     )
     deleted = int(result.get("deleted", 0))
+    await _audit(
+        core,
+        "schedule.cleanup",
+        status="success" if deleted else "info",
+        channel_id=channel_id,
+        message=f"Cleanup deleted {deleted} old schedule version(s)",
+        details={
+            "keep_latest": keep_latest,
+            "statuses": statuses,
+            "include_uploaded": include_uploaded,
+            "result": result,
+        },
+    )
     logger.info(
         "Cleaned schedule versions channel_id=%s keep_latest=%s statuses=%s deleted=%s",
         channel_id,
@@ -314,6 +358,13 @@ async def delete_schedule(request: Request, channel_id: str, version: int) -> HT
         return await _action_result(
             request, channel, "danger", "Schedule version not found.", status_code=404,
         )
+    await _audit(
+        core,
+        "schedule.delete",
+        channel_id=channel_id,
+        schedule_version=version,
+        message=f"Deleted schedule version {version}",
+    )
     logger.info("Deleted schedule version channel_id=%s version=%s", channel_id, version)
     return await _action_result(
         request, channel, "success", f"Deleted schedule version {version}.",
@@ -372,6 +423,15 @@ async def upload_schedule(request: Request, channel_id: str, version: int) -> HT
             f"Tunarr rejected upload ({e.response.status_code}): {detail}",
             {"status_code": e.response.status_code},
         )
+        await _audit(
+            core,
+            "schedule.upload",
+            status="failed",
+            channel_id=channel_id,
+            schedule_version=version,
+            message=public_detail,
+            details={"status_code": e.response.status_code},
+        )
         core.metrics.record_upload(channel_id, "failed")
         if getattr(core, "notification_router", None) is not None:
             await core.notification_router.send(NotificationMessage(
@@ -404,6 +464,15 @@ async def upload_schedule(request: Request, channel_id: str, version: int) -> HT
             f"Tunarr upload failed: {e}",
             {"error": str(e)},
         )
+        await _audit(
+            core,
+            "schedule.upload",
+            status="failed",
+            channel_id=channel_id,
+            schedule_version=version,
+            message=public_detail,
+            details={"error": str(e)},
+        )
         core.metrics.record_upload(channel_id, "failed")
         if getattr(core, "notification_router", None) is not None:
             await core.notification_router.send(NotificationMessage(
@@ -429,6 +498,14 @@ async def upload_schedule(request: Request, channel_id: str, version: int) -> HT
         "success",
         "Uploaded schedule version.",
         upload_details if isinstance(upload_details, dict) else {},
+    )
+    await _audit(
+        core,
+        "schedule.upload",
+        channel_id=channel_id,
+        schedule_version=version,
+        message=f"Uploaded schedule version {version}",
+        details={"upload": upload_details},
     )
     core.metrics.record_upload(channel_id, "success")
     if getattr(core, "notification_router", None) is not None:
@@ -788,6 +865,36 @@ def _unique_errors(errors: list[str]) -> list[str]:
         seen.add(error)
         result.append(error)
     return result
+
+
+async def _audit(
+    core: Any,
+    action: str,
+    *,
+    status: str = "success",
+    channel_id: str = "",
+    schedule_version: int | None = None,
+    target_type: str = "",
+    target_id: str = "",
+    message: str = "",
+    details: dict[str, Any] | None = None,
+) -> None:
+    repo = getattr(core, "audit_repo", None)
+    if repo is None:
+        return
+    try:
+        await repo.record(
+            action,
+            status=status,
+            channel_id=channel_id,
+            schedule_version=schedule_version,
+            target_type=target_type,
+            target_id=target_id,
+            message=message,
+            details=details,
+        )
+    except Exception:
+        logger.debug("Audit logging failed for action=%s", action, exc_info=True)
 
 
 async def _action_result(
