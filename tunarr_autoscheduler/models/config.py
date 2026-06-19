@@ -167,6 +167,7 @@ class EmailNotificationConfig(BaseModel):
     password: str = ""
     from_address: str = ""
     to_addresses: list[str] = Field(default_factory=list)
+    smtp_security: Literal["plain", "starttls", "ssl"] = "starttls"
     use_tls: bool = True
 
 

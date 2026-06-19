@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 import zipfile
 from datetime import UTC, datetime, timedelta
 
@@ -39,6 +40,7 @@ from tunarr_autoscheduler.web.routes.public import _merge_consecutive_epg_items
 
 class ConfigManager:
     def __init__(self, channels: list[ChannelConfig]) -> None:
+        self.config_path = "~/.tunarr/config.yaml"
         self._config = AppConfig(
             auth=AuthConfig(
                 password_hash=hash_password("password123"),
@@ -58,6 +60,10 @@ class ConfigManager:
         if config is not None:
             self._config = config
         self.saved = True
+
+    def load(self) -> AppConfig:
+        self.saved = True
+        return self._config
 
 
 class JobManager:
@@ -1265,6 +1271,45 @@ def test_settings_save_backup_config() -> None:
     assert core.config_manager.saved is True
 
 
+def test_settings_lists_downloads_deletes_and_restores_backups(tmp_path) -> None:
+    core = Core()
+    config_path = tmp_path / "config.yaml"
+    db_path = tmp_path / "scheduler.db"
+    backups_dir = tmp_path / "backups"
+    backups_dir.mkdir()
+    config_path.write_text("timezone: UTC\n", encoding="utf-8")
+    conn = sqlite3.connect(db_path)
+    conn.execute("CREATE TABLE sample (id INTEGER PRIMARY KEY)")
+    conn.commit()
+    conn.close()
+    core.config_manager.config_path = str(config_path)
+    core.config_manager.config().database.url = f"sqlite+aiosqlite:///{db_path}"
+    core.config_manager.config().backups.output_dir = str(backups_dir)
+    archive = backups_dir / "tunarr-autoscheduler-backup-test.zip"
+    with zipfile.ZipFile(archive, "w") as zf:
+        zf.writestr("manifest.json", "{}")
+        zf.writestr("config.yaml", "timezone: Europe/Berlin\n")
+        zf.writestr("scheduler.db", b"new-db")
+    client = make_client(core)
+
+    page = client.get("/settings")
+    assert page.status_code == 200
+    assert archive.name in page.text
+    download = client.get(f"/settings/backups/{archive.name}/download")
+    assert download.status_code == 200
+    restore = client.post(
+        "/settings/backups/restore",
+        data={"backup_name": archive.name},
+        follow_redirects=False,
+    )
+    assert restore.status_code == 303
+    assert config_path.read_text(encoding="utf-8") == "timezone: Europe/Berlin\n"
+    assert db_path.read_bytes() == b"new-db"
+    delete = client.post(f"/settings/backups/{archive.name}/delete", follow_redirects=False)
+    assert delete.status_code == 303
+    assert not archive.exists()
+
+
 def test_settings_save_public_access_config() -> None:
     core = Core()
     client = make_client(core)
@@ -1277,6 +1322,33 @@ def test_settings_save_public_access_config() -> None:
 
     assert response.status_code == 303
     assert core.config_manager.config().public_access.epg == "jellyfin_login"
+    assert core.config_manager.saved is True
+
+
+def test_settings_save_notification_smtp_security() -> None:
+    core = Core()
+    client = make_client(core)
+
+    response = client.post("/settings", data={
+        "timezone": "Europe/Berlin",
+        "notifications_submitted": "1",
+        "notifications_enabled": "on",
+        "email_enabled": "on",
+        "email_smtp_host": "smtp.example.test",
+        "email_smtp_port": "465",
+        "email_username": "mailer",
+        "email_password": "secret",
+        "email_from_address": "scheduler@example.test",
+        "email_to_addresses": "ops@example.test",
+        "email_smtp_security": "ssl",
+        "webhook_headers_json": "{}",
+    }, follow_redirects=False)
+
+    email = core.config_manager.config().notifications.email
+    assert response.status_code == 303
+    assert email.smtp_security == "ssl"
+    assert email.use_tls is False
+    assert email.smtp_port == 465
     assert core.config_manager.saved is True
 
 
@@ -1316,6 +1388,11 @@ def test_settings_page_has_tabs_and_help_tooltips() -> None:
     assert 'data-bs-toggle="tooltip"' in response.text
     assert 'name="connections_submitted"' in response.text
     assert "Jellyfin / Tunarr Connections" in response.text
+    assert "Jellyfin login required" in response.text
+    assert "Dashboard &gt; Users" in response.text
+    assert "SMTP Security" in response.text
+    assert "Artwork and Metadata Providers" in response.text
+    assert "Restore Uploaded Backup" in response.text
 
 
 def test_settings_can_test_jellystat_without_saving(monkeypatch) -> None:
@@ -2901,11 +2978,11 @@ def test_settings_page_shows_admin_login_form() -> None:
     assert response.status_code == 200
     assert "Admin Login" in response.text
     assert 'name="auth_username"' in response.text
-    assert 'name="auth_current_password"' in response.text
+    assert 'name="auth_current_password"' not in response.text
     assert 'name="auth_new_password"' in response.text
 
 
-def test_settings_admin_login_rejects_wrong_current_password() -> None:
+def test_settings_admin_login_rejects_short_new_password() -> None:
     core = Core()
     client = make_client(core)
     original_hash = core.config_manager.config().auth.password_hash
@@ -2916,14 +2993,13 @@ def test_settings_admin_login_rejects_wrong_current_password() -> None:
             "timezone": "Europe/Berlin",
             "auth_submitted": "1",
             "auth_username": "new-admin",
-            "auth_current_password": "wrong",
-            "auth_new_password": "new-password",
-            "auth_confirm_password": "new-password",
+            "auth_new_password": "short",
+            "auth_confirm_password": "short",
         },
     )
 
     assert response.status_code == 400
-    assert "Current password is incorrect." in response.text
+    assert "New password must be at least 8 characters long." in response.text
     assert core.config_manager.config().auth.username == "admin"
     assert core.config_manager.config().auth.password_hash == original_hash
 
@@ -2938,7 +3014,6 @@ def test_settings_admin_login_updates_credentials_and_requires_relogin() -> None
             "timezone": "Europe/Berlin",
             "auth_submitted": "1",
             "auth_username": "new-admin",
-            "auth_current_password": "password123",
             "auth_new_password": "new-password",
             "auth_confirm_password": "new-password",
         },

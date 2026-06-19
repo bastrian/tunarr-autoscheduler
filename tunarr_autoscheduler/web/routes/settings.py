@@ -1,13 +1,19 @@
 from __future__ import annotations
 
 import json
+import shutil
+import tempfile
+import zipfile
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from pydantic import ValidationError
+from starlette.datastructures import UploadFile
 
-from tunarr_autoscheduler.core.auth import hash_password, verify_password
+from tunarr_autoscheduler.core.auth import hash_password
+from tunarr_autoscheduler.core.backups import create_backup_archive
 from tunarr_autoscheduler.integrations.metadata.audit import build_metadata_audit
 from tunarr_autoscheduler.integrations.metadata.clients import JellystatClient
 from tunarr_autoscheduler.integrations.metadata.service import (
@@ -36,6 +42,18 @@ EVENT_TYPE_OPTIONS = [
     "backup_succeeded",
 ]
 PROVIDER_OPTIONS = ["telegram", "email", "webhook"]
+TIMEZONE_OPTIONS = [
+    "Europe/Berlin",
+    "UTC",
+    "Europe/London",
+    "America/New_York",
+    "America/Los_Angeles",
+    "America/Chicago",
+    "America/Denver",
+    "Asia/Tokyo",
+    "Australia/Sydney",
+]
+SMTP_SECURITY_OPTIONS = ["plain", "starttls", "ssl"]
 
 
 @router.get("/settings", response_class=HTMLResponse)
@@ -173,7 +191,8 @@ async def save_settings(request: Request) -> Response:
                 for item in str(form.get("email_to_addresses", "")).split(",")
                 if item.strip()
             ],
-            "use_tls": form.get("email_use_tls") == "on",
+            "smtp_security": _smtp_security_value(form.get("email_smtp_security")),
+            "use_tls": _smtp_security_value(form.get("email_smtp_security")) == "starttls",
         }
         try:
             webhook_headers = _json_dict(str(form.get("webhook_headers_json", "{}")))
@@ -181,15 +200,11 @@ async def save_settings(request: Request) -> Response:
             template = request.app.state.templates.get_template("settings.html")
             return HTMLResponse(
                 template.render(
-                    request=request,
-                    config=current_config,
-                    error=str(e),
-                    metadata_audit={},
-                    metadata_rate_limit_alert=read_rate_limit_alert(),
-                    notification_events=[],
-                    webhook_headers_json=_webhook_headers_json(current_config),
-                    notification_event_types=EVENT_TYPE_OPTIONS,
-                    notification_providers=PROVIDER_OPTIONS,
+                    **await _settings_context(
+                        request,
+                        current_config,
+                        error=str(e),
+                    ),
                 ),
                 status_code=400,
             )
@@ -206,15 +221,11 @@ async def save_settings(request: Request) -> Response:
         template = request.app.state.templates.get_template("settings.html")
         return HTMLResponse(
             template.render(
-                request=request,
-                config=current_config,
-                error=str(e),
-                metadata_audit={},
-                metadata_rate_limit_alert=read_rate_limit_alert(),
-                notification_events=[],
-                webhook_headers_json=_webhook_headers_json(current_config),
-                notification_event_types=EVENT_TYPE_OPTIONS,
-                notification_providers=PROVIDER_OPTIONS,
+                **await _settings_context(
+                    request,
+                    current_config,
+                    error=str(e),
+                ),
             ),
             status_code=400,
         )
@@ -262,6 +273,63 @@ async def test_jellystat_settings(request: Request) -> HTMLResponse:
             jellystat_test_result=result,
         ),
     ))
+
+
+@router.get("/settings/backups/{backup_name}/download")
+async def download_backup(request: Request, backup_name: str) -> FileResponse:
+    config = request.app.state.core.config_manager.config()
+    backup_path = _backup_archive_path(config, backup_name)
+    return FileResponse(
+        backup_path,
+        media_type="application/zip",
+        filename=backup_path.name,
+    )
+
+
+@router.post("/settings/backups/{backup_name}/delete")
+async def delete_backup(request: Request, backup_name: str) -> RedirectResponse:
+    config = request.app.state.core.config_manager.config()
+    backup_path = _backup_archive_path(config, backup_name)
+    backup_path.unlink(missing_ok=True)
+    return RedirectResponse("/settings?saved=1#settings-operations", status_code=303)
+
+
+@router.post("/settings/backups/restore")
+async def restore_backup(request: Request) -> RedirectResponse:
+    core = request.app.state.core
+    form = await request.form()
+    config = core.config_manager.config()
+    selected_name = str(form.get("backup_name", "")).strip()
+    upload = form.get("backup_upload")
+    if isinstance(upload, UploadFile) and upload.filename:
+        with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as temp_file:
+            shutil.copyfileobj(upload.file, temp_file)
+            archive_path = Path(temp_file.name)
+    elif selected_name:
+        archive_path = _backup_archive_path(config, selected_name)
+    else:
+        return RedirectResponse(
+            "/settings?backup_error=missing#settings-operations",
+            status_code=303,
+        )
+    try:
+        await create_backup_archive(
+            config=config,
+            config_path=_config_path(core),
+            output_dir=config.backups.output_dir,
+            backup_config=config.backups,
+            notification_router=getattr(core, "notification_router", None),
+        )
+        _restore_backup_archive(archive_path, core)
+    except (ValueError, zipfile.BadZipFile):
+        return RedirectResponse(
+            "/settings?backup_error=invalid#settings-operations",
+            status_code=303,
+        )
+    finally:
+        if isinstance(upload, UploadFile) and upload.filename:
+            archive_path.unlink(missing_ok=True)
+    return RedirectResponse("/settings?restored=1#settings-operations", status_code=303)
 
 
 @router.post("/api/channels/sync")
@@ -362,6 +430,9 @@ async def _settings_context(
         "webhook_headers_json": _webhook_headers_json(config),
         "notification_event_types": EVENT_TYPE_OPTIONS,
         "notification_providers": PROVIDER_OPTIONS,
+        "timezone_options": TIMEZONE_OPTIONS,
+        "smtp_security_options": SMTP_SECURITY_OPTIONS,
+        "backup_archives": _list_backup_archives(config),
         "jellystat_test_result": jellystat_test_result,
     }
 
@@ -441,17 +512,12 @@ def _metadata_from_form(form: Any, current_metadata: Any) -> dict[str, Any]:
     return metadata
 
 
-def _auth_update_error(form: Any, config: AppConfig) -> str:
+def _auth_update_error(form: Any, _config: AppConfig) -> str:
     username = str(form.get("auth_username", "")).strip()
-    current_password = str(form.get("auth_current_password", ""))
     new_password = str(form.get("auth_new_password", ""))
     confirm_password = str(form.get("auth_confirm_password", ""))
     if not username:
         return "Admin username is required."
-    if not current_password:
-        return "Current password is required."
-    if not verify_password(current_password, config.auth.password_hash):
-        return "Current password is incorrect."
     if len(new_password) < 8:
         return "New password must be at least 8 characters long."
     if new_password != confirm_password:
@@ -465,6 +531,92 @@ def _int_form(value: object, default: object) -> int:
     except ValueError:
         parsed = int(str(default))
     return max(1, parsed)
+
+
+def _smtp_security_value(value: object) -> str:
+    raw = str(value or "starttls").strip().lower()
+    return raw if raw in SMTP_SECURITY_OPTIONS else "starttls"
+
+
+def _backup_directory(config: AppConfig) -> Path:
+    return Path(config.backups.output_dir).expanduser().resolve()
+
+
+def _backup_archive_path(config: AppConfig, backup_name: str) -> Path:
+    if Path(backup_name).name != backup_name:
+        raise ValueError("Invalid backup name.")
+    backup_path = (_backup_directory(config) / backup_name).resolve()
+    if backup_path.parent != _backup_directory(config):
+        raise ValueError("Invalid backup path.")
+    if not backup_path.name.startswith("tunarr-autoscheduler-backup-"):
+        raise ValueError("Invalid backup archive.")
+    if backup_path.suffix != ".zip" or not backup_path.exists():
+        raise ValueError("Backup archive not found.")
+    return backup_path
+
+
+def _list_backup_archives(config: AppConfig) -> list[dict[str, object]]:
+    directory = _backup_directory(config)
+    if not directory.exists():
+        return []
+    archives = sorted(
+        directory.glob("tunarr-autoscheduler-backup-*.zip"),
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )
+    return [
+        {
+            "name": archive.name,
+            "size": _format_bytes(archive.stat().st_size),
+            "modified": archive.stat().st_mtime,
+        }
+        for archive in archives
+        if archive.is_file()
+    ]
+
+
+def _restore_backup_archive(archive_path: Path, core: Any) -> None:
+    config_path = Path(_config_path(core)).expanduser()
+    config = core.config_manager.config()
+    db_path = Path(config.database.url.replace("sqlite+aiosqlite:///", "")).expanduser()
+    with zipfile.ZipFile(archive_path) as zf:
+        names = set(zf.namelist())
+        if "manifest.json" not in names or "config.yaml" not in names:
+            raise ValueError("Backup archive is missing required files.")
+        with tempfile.TemporaryDirectory(prefix="tunarr-autoscheduler-restore-") as temp_dir:
+            temp_root = Path(temp_dir)
+            restored_config = temp_root / "config.yaml"
+            restored_db = temp_root / "scheduler.db"
+            restored_config.write_bytes(zf.read("config.yaml"))
+            if "scheduler.db" in names:
+                restored_db.write_bytes(zf.read("scheduler.db"))
+            if config_path.exists():
+                shutil.copy2(
+                    config_path,
+                    config_path.with_suffix(config_path.suffix + ".pre-restore"),
+                )
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(restored_config, config_path)
+            if restored_db.exists():
+                db_path.parent.mkdir(parents=True, exist_ok=True)
+                if db_path.exists():
+                    shutil.copy2(db_path, db_path.with_suffix(db_path.suffix + ".pre-restore"))
+                shutil.copy2(restored_db, db_path)
+    if hasattr(core.config_manager, "load"):
+        core.config_manager.load()
+
+
+def _config_path(core: Any) -> str:
+    return str(getattr(core.config_manager, "config_path", "~/.tunarr/config.yaml"))
+
+
+def _format_bytes(value: int) -> str:
+    size = float(value)
+    for unit in ("B", "KiB", "MiB", "GiB", "TiB"):
+        if size < 1024 or unit == "TiB":
+            return f"{size:.1f} {unit}"
+        size /= 1024
+    return f"{value} B"
 
 
 def _webhook_headers_json(config: AppConfig) -> str:

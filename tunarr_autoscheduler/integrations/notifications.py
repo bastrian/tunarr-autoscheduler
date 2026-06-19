@@ -270,7 +270,18 @@ def _send_email_sync(config: Any, notification: NotificationMessage) -> None:
     message["To"] = ", ".join(config.to_addresses)
     message.set_content(_plain_text(notification))
 
-    if config.use_tls:
+    security = getattr(config, "smtp_security", "starttls" if config.use_tls else "plain")
+    if security == "ssl":
+        with smtplib.SMTP_SSL(
+            config.smtp_host,
+            config.smtp_port,
+            timeout=10,
+            context=ssl.create_default_context(),
+        ) as smtp:
+            if config.username:
+                smtp.login(config.username, config.password)
+            smtp.send_message(message)
+    elif security == "starttls":
         with smtplib.SMTP(config.smtp_host, config.smtp_port, timeout=10) as smtp:
             smtp.starttls(context=ssl.create_default_context())
             if config.username:

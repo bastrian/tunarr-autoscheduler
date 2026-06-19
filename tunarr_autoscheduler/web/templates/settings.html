@@ -18,6 +18,12 @@
   {% if request.query_params.get("saved") == "1" %}
   <div class="alert alert-success">Settings saved.</div>
   {% endif %}
+  {% if request.query_params.get("restored") == "1" %}
+  <div class="alert alert-success">Backup restored. Restart the scheduler service if restored database changes are not visible immediately.</div>
+  {% endif %}
+  {% if request.query_params.get("backup_error") %}
+  <div class="alert alert-danger">Backup action failed. Check that the selected file is a valid scheduler backup archive.</div>
+  {% endif %}
   {% if error %}
   <div class="alert alert-danger">{{ error }}</div>
   {% endif %}
@@ -62,15 +68,11 @@
       <form method="post" action="/settings" class="row g-3 align-items-end">
         <div class="col-md-6">
           <label class="form-label" for="timezone">Timezone {{ help_tip("Controls how schedules, previews, and public EPG times are displayed.") }}</label>
-          <input class="form-control" id="timezone" name="timezone"
-                 value="{{ config.timezone }}" list="timezone-options" required>
-          <datalist id="timezone-options">
-            <option value="Europe/Berlin">
-            <option value="UTC">
-            <option value="Europe/London">
-            <option value="America/New_York">
-            <option value="America/Los_Angeles">
-          </datalist>
+          <select class="form-select" id="timezone" name="timezone" required>
+            {% for timezone in timezone_options %}
+            <option value="{{ timezone }}" {% if config.timezone == timezone %}selected{% endif %}>{{ timezone }}</option>
+            {% endfor %}
+          </select>
         </div>
         <div class="col-md-auto">
           <button class="btn btn-gold" type="submit">Save Settings</button>
@@ -89,19 +91,13 @@
           <input class="form-control" id="auth_username" name="auth_username"
                  value="{{ config.auth.username }}" autocomplete="username" required>
         </div>
-        <div class="col-md-3">
-          <label class="form-label" for="auth_current_password">Current Password {{ help_tip("Required before changing the admin login.") }}</label>
-          <input class="form-control" id="auth_current_password"
-                 name="auth_current_password" type="password"
-                 autocomplete="current-password" required>
-        </div>
-        <div class="col-md-3">
+        <div class="col-md-4">
           <label class="form-label" for="auth_new_password">New Password {{ help_tip("Use at least 8 characters. Saving signs out the current browser session.") }}</label>
           <input class="form-control" id="auth_new_password"
                  name="auth_new_password" type="password" minlength="8"
                  autocomplete="new-password" required>
         </div>
-        <div class="col-md-3">
+        <div class="col-md-4">
           <label class="form-label" for="auth_confirm_password">Confirm Password</label>
           <input class="form-control" id="auth_confirm_password"
                  name="auth_confirm_password" type="password" minlength="8"
@@ -171,6 +167,50 @@
           </div>
         </div>
       </form>
+      <hr class="my-4">
+      <div class="settings-subsection">
+        <div class="d-flex align-items-center justify-content-between gap-2 mb-3">
+          <h2 class="h5 mb-0">Available Backups {{ help_tip("Existing scheduler backup archives in the configured backup directory.") }}</h2>
+        </div>
+        {% if backup_archives %}
+        <div class="table-responsive">
+          <table class="table table-hover align-middle">
+            <thead><tr><th>Archive</th><th>Size</th><th>Actions</th></tr></thead>
+            <tbody>
+              {% for backup in backup_archives %}
+              <tr>
+                <td class="font-monospace">{{ backup.name }}</td>
+                <td>{{ backup.size }}</td>
+                <td class="d-flex flex-wrap gap-2">
+                  <a class="btn btn-outline-info btn-sm" href="/settings/backups/{{ backup.name }}/download">Download</a>
+                  <form method="post" action="/settings/backups/{{ backup.name }}/delete" data-confirm-submit="Delete backup {{ backup.name }}?">
+                    <button class="btn btn-outline-danger btn-sm" type="submit">Delete</button>
+                  </form>
+                  <form method="post" action="/settings/backups/restore" data-confirm-submit="Restore {{ backup.name }}? A pre-restore backup will be created first.">
+                    <input type="hidden" name="backup_name" value="{{ backup.name }}">
+                    <button class="btn btn-outline-warning btn-sm" type="submit">Restore</button>
+                  </form>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <p class="text-secondary">No backup archives found in the configured output directory.</p>
+        {% endif %}
+        <form method="post" action="/settings/backups/restore" enctype="multipart/form-data"
+              class="row g-3 align-items-end mt-2"
+              data-confirm-submit="Restore uploaded backup? A pre-restore backup will be created first.">
+          <div class="col-md-6">
+            <label class="form-label" for="backup_upload">Restore Uploaded Backup {{ help_tip("Upload a scheduler backup ZIP created by this app. The archive must contain config.yaml and manifest.json.") }}</label>
+            <input class="form-control" id="backup_upload" name="backup_upload" type="file" accept=".zip">
+          </div>
+          <div class="col-md-auto">
+            <button class="btn btn-outline-warning" type="submit">Restore Uploaded Backup</button>
+          </div>
+        </form>
+      </div>
     </div>
   </div>
   <div class="card mb-3" data-settings-section="general">
@@ -182,8 +222,8 @@
         <div class="col-md-5">
           <label class="form-label" for="public_epg_access">EPG and Public Guide Exports {{ help_tip("Controls access for public guide pages, EPG images, JSON exports, and XMLTV exports.") }}</label>
           <select class="form-select" id="public_epg_access" name="public_epg_access">
-            <option value="disabled" {% if config.public_access.epg == "disabled" %}selected{% endif %}>Deaktiviert</option>
-            <option value="jellyfin_login" {% if config.public_access.epg == "jellyfin_login" %}selected{% endif %}>Nur mit Jellyfin Login</option>
+            <option value="disabled" {% if config.public_access.epg == "disabled" %}selected{% endif %}>Disabled</option>
+            <option value="jellyfin_login" {% if config.public_access.epg == "jellyfin_login" %}selected{% endif %}>Jellyfin login required</option>
             <option value="public" {% if config.public_access.epg == "public" %}selected{% endif %}>Public</option>
           </select>
           <div class="form-text">
@@ -202,7 +242,8 @@
       <form method="post" action="/settings" class="row g-3 align-items-end">
         <input type="hidden" name="timezone" value="{{ config.timezone }}">
         <input type="hidden" name="notifications_submitted" value="1">
-        <div class="col-md-3">
+        <div class="col-12"><h2 class="settings-group-title">Routing Master Switch</h2></div>
+        <div class="col-md-4">
           <label class="form-label" for="notifications_enabled">Notification Routing {{ help_tip("Master switch for all notification providers and event routing rules.") }}</label>
           <div class="form-switch-card">
             <input class="form-check-input" id="notifications_enabled"
@@ -211,7 +252,8 @@
             <label class="form-check-label" for="notifications_enabled">Enabled</label>
           </div>
         </div>
-        <div class="col-md-3">
+        <div class="col-12"><h2 class="settings-group-title">Telegram</h2></div>
+        <div class="col-md-4">
           <label class="form-label" for="telegram_enabled">Telegram {{ help_tip("Send selected scheduler events to a Telegram chat.") }}</label>
           <div class="form-switch-card">
             <input class="form-check-input" id="telegram_enabled"
@@ -220,17 +262,18 @@
             <label class="form-check-label" for="telegram_enabled">Enabled</label>
           </div>
         </div>
-        <div class="col-md-4">
+        <div class="col-md-5">
           <label class="form-label" for="telegram_bot_token">Telegram Bot Token</label>
           <input class="form-control" id="telegram_bot_token" name="telegram_bot_token"
                  type="password" value="{{ config.notifications.telegram.bot_token }}"
                  autocomplete="off">
         </div>
-        <div class="col-md-2">
+        <div class="col-md-3">
           <label class="form-label" for="telegram_chat_id">Chat ID</label>
           <input class="form-control" id="telegram_chat_id" name="telegram_chat_id"
                  value="{{ config.notifications.telegram.chat_id }}">
         </div>
+        <div class="col-12"><h2 class="settings-group-title">Email / SMTP Server</h2></div>
         <div class="col-md-3">
           <label class="form-label" for="email_enabled">Email / SMTP {{ help_tip("Send selected scheduler events through an SMTP server.") }}</label>
           <div class="form-switch-card">
@@ -272,13 +315,15 @@
           <div class="form-text">Comma-separated recipient list.</div>
         </div>
         <div class="col-md-3">
-          <label class="form-label" for="email_use_tls">SMTP TLS</label>
-          <div class="form-switch-card">
-            <input class="form-check-input" id="email_use_tls" name="email_use_tls"
-                   type="checkbox" {% if config.notifications.email.use_tls %}checked{% endif %}>
-            <label class="form-check-label" for="email_use_tls">Use STARTTLS</label>
-          </div>
+          <label class="form-label" for="email_smtp_security">SMTP Security {{ help_tip("Plain sends directly, STARTTLS upgrades after connect, SSL/TLS connects through an encrypted SMTP socket.") }}</label>
+          {% set smtp_security = config.notifications.email.smtp_security if config.notifications.email.smtp_security else ("starttls" if config.notifications.email.use_tls else "plain") %}
+          <select class="form-select" id="email_smtp_security" name="email_smtp_security">
+            <option value="plain" {% if smtp_security == "plain" %}selected{% endif %}>Plain</option>
+            <option value="starttls" {% if smtp_security == "starttls" %}selected{% endif %}>STARTTLS</option>
+            <option value="ssl" {% if smtp_security == "ssl" %}selected{% endif %}>SSL/TLS</option>
+          </select>
         </div>
+        <div class="col-12"><h2 class="settings-group-title">Webhook</h2></div>
         <div class="col-md-3">
           <label class="form-label" for="webhook_enabled">Webhook {{ help_tip("POST selected scheduler events to an external automation endpoint.") }}</label>
           <div class="form-switch-card">
@@ -293,9 +338,10 @@
                  value="{{ config.notifications.webhook.url }}">
         </div>
         <div class="col-md-12">
-          <label class="form-label" for="webhook_headers_json">Webhook Headers JSON</label>
+          <label class="form-label" for="webhook_headers_json">Webhook Headers JSON {{ help_tip("Optional HTTP headers sent with each webhook request, for example {\"Authorization\":\"Bearer token\"}.") }}</label>
           <textarea class="form-control font-monospace" id="webhook_headers_json"
                     name="webhook_headers_json" rows="3">{{ webhook_headers_json }}</textarea>
+          <div class="form-text">Use a JSON object of string headers. Leave as <code>{}</code> when the webhook endpoint does not require custom headers.</div>
         </div>
         <div class="col-12">
           <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
@@ -422,6 +468,7 @@
           </div>
         </div>
         {% endif %}
+        <div class="col-12"><h2 class="settings-group-title">Artwork and Metadata Providers</h2></div>
         <div class="col-md-3">
           <label class="form-label" for="metadata_tmdb_enabled">TMDB Enrichment {{ help_tip("Uses TMDB as a fallback source for public EPG artwork and descriptions.") }}</label>
           <div class="form-switch-card">
@@ -494,6 +541,7 @@
                  value="{{ config.metadata.omdb_rate_limit_per_minute }}">
           <div class="form-text">Adjust if your OMDb key allows higher throughput.</div>
         </div>
+        <div class="col-12"><h2 class="settings-group-title">Jellystat Recommendation Signals</h2></div>
         <div class="col-md-3">
           <label class="form-label" for="metadata_jellystat_enabled">Jellystat Signals {{ help_tip("Adds Jellystat viewing activity, trends, and underused-content signals to recommendations.") }}</label>
           <div class="form-switch-card">
@@ -564,6 +612,7 @@
                  name="metadata_jellystat_rate_limit_per_minute" type="number" min="1"
                  value="{{ config.metadata.jellystat_rate_limit_per_minute }}">
         </div>
+        <div class="col-12"><h2 class="settings-group-title">Cache</h2></div>
         <div class="col-md-2">
           <label class="form-label" for="metadata_cache_ttl_days">Cache TTL Days</label>
           <input class="form-control" id="metadata_cache_ttl_days"
@@ -628,6 +677,9 @@
           <label class="form-label" for="jellyfin_user_id">Jellyfin User ID {{ help_tip("User context used when Jellyfin requires user-scoped media access.") }}</label>
           <input class="form-control" id="jellyfin_user_id" name="jellyfin_user_id"
                  value="{{ config.jellyfin.user_id }}" required>
+          <div class="form-text">
+            In Jellyfin, open Dashboard &gt; Users, select the user, and copy the id from the browser URL or user details API response.
+          </div>
         </div>
         <div class="col-md-3">
           <label class="form-label" for="jellyfin_sync_interval_minutes">Sync Interval {{ help_tip("Default interval, in minutes, for background Jellyfin media refreshes.") }}</label>
@@ -762,6 +814,15 @@
 
   document.querySelectorAll("[data-bs-toggle='tooltip']").forEach((element) => {
     new bootstrap.Tooltip(element);
+  });
+
+  document.querySelectorAll("[data-confirm-submit]").forEach((form) => {
+    form.addEventListener("submit", (event) => {
+      const message = form.dataset.confirmSubmit || "Continue?";
+      if (!window.confirm(message)) {
+        event.preventDefault();
+      }
+    });
   });
 
   const list = document.getElementById("notification-rule-list");
