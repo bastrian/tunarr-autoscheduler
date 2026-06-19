@@ -30,13 +30,13 @@
 
   <nav class="epg-control-panel" aria-label="EPG navigation">
     <div class="epg-view-toggle">
-      <a class="{% if view == 'day' %}active{% endif %}" href="{{ epg_path }}?view=day&period={{ period }}&date={{ selected_date.isoformat() }}{% if selected_channel %}&channel={{ selected_channel }}{% endif %}">Day</a>
-      <a class="{% if view == 'week' %}active{% endif %}" href="{{ epg_path }}?view=week&period=day&date={{ selected_date.isoformat() }}{% if selected_channel %}&channel={{ selected_channel }}{% endif %}">Week</a>
+      <a class="{% if view == 'day' %}active{% endif %}" href="{{ epg_path }}?view=day&period={{ period }}&date={{ selected_date.isoformat() }}{% if selected_channel %}&channel={{ selected_channel }}{% endif %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}">Day</a>
+      <a class="{% if view == 'week' %}active{% endif %}" href="{{ epg_path }}?view=week&period=day&date={{ selected_date.isoformat() }}{% if selected_channel %}&channel={{ selected_channel }}{% endif %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}">Week</a>
     </div>
 
     <div class="epg-period-strip" aria-label="Time window">
       {% for option in period_options %}
-      <a class="{% if period == option.id %}active{% endif %}" href="{{ epg_path }}?view={{ view }}&period={{ option.id }}&date={{ selected_date.isoformat() }}{% if selected_channel %}&channel={{ selected_channel }}{% endif %}">
+      <a class="{% if period == option.id %}active{% endif %}" href="{{ epg_path }}?view={{ view }}&period={{ option.id }}&date={{ selected_date.isoformat() }}{% if selected_channel %}&channel={{ selected_channel }}{% endif %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}">
         {{ option.label }}
       </a>
       {% endfor %}
@@ -46,6 +46,7 @@
       <input type="hidden" name="view" value="{{ view }}">
       <input type="hidden" name="period" value="{{ period }}">
       <input type="hidden" name="date" value="{{ selected_date.isoformat() }}">
+      <input type="hidden" name="q" value="{{ search_query }}">
       <label for="epg-channel">Channel</label>
       <select id="epg-channel" name="channel" onchange="this.form.submit()">
         <option value="">All channels</option>
@@ -55,16 +56,25 @@
       </select>
     </form>
 
+    <form class="epg-search-filter" method="get" action="{{ epg_path }}">
+      <input type="hidden" name="view" value="{{ view }}">
+      <input type="hidden" name="period" value="{{ period }}">
+      <input type="hidden" name="date" value="{{ selected_date.isoformat() }}">
+      {% if selected_channel %}<input type="hidden" name="channel" value="{{ selected_channel }}">{% endif %}
+      <label for="epg-search">Search</label>
+      <input id="epg-search" name="q" value="{{ search_query }}" placeholder="Title, series, movie, channel">
+    </form>
+
     <div class="epg-pager">
-      <a href="{{ epg_path }}?view={{ view }}&period={{ period }}&date={{ previous_date.isoformat() }}{% if selected_channel %}&channel={{ selected_channel }}{% endif %}" aria-label="Previous {{ view }}">&lsaquo;</a>
-      <a href="{{ epg_path }}?view={{ view }}&period={{ period }}{% if selected_channel %}&channel={{ selected_channel }}{% endif %}" aria-label="Today">Today</a>
-      <a href="{{ epg_path }}?view={{ view }}&period={{ period }}&date={{ next_date.isoformat() }}{% if selected_channel %}&channel={{ selected_channel }}{% endif %}" aria-label="Next {{ view }}">&rsaquo;</a>
+      <a href="{{ epg_path }}?view={{ view }}&period={{ period }}&date={{ previous_date.isoformat() }}{% if selected_channel %}&channel={{ selected_channel }}{% endif %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}" aria-label="Previous {{ view }}">&lsaquo;</a>
+      <a href="{{ epg_path }}?view={{ view }}&period={{ period }}{% if selected_channel %}&channel={{ selected_channel }}{% endif %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}" aria-label="Today">Today</a>
+      <a href="{{ epg_path }}?view={{ view }}&period={{ period }}&date={{ next_date.isoformat() }}{% if selected_channel %}&channel={{ selected_channel }}{% endif %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}" aria-label="Next {{ view }}">&rsaquo;</a>
     </div>
 
     <div class="epg-export-links" aria-label="Public exports">
-      <a href="/public/epg.json?view={{ view }}&period={{ period }}&date={{ selected_date.isoformat() }}{% if selected_channel %}&channel={{ selected_channel }}{% endif %}">JSON</a>
-      <a href="/public/epg.xml?view={{ view }}&period={{ period }}&date={{ selected_date.isoformat() }}{% if selected_channel %}&channel={{ selected_channel }}{% endif %}">XMLTV</a>
-      <a href="/public/epg/export?view={{ view }}&period={{ period }}&date={{ selected_date.isoformat() }}{% if selected_channel %}&channel={{ selected_channel }}{% endif %}">Standalone</a>
+      <a href="/public/epg.json?view={{ view }}&period={{ period }}&date={{ selected_date.isoformat() }}{% if selected_channel %}&channel={{ selected_channel }}{% endif %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}">JSON</a>
+      <a href="/public/epg.xml?view={{ view }}&period={{ period }}&date={{ selected_date.isoformat() }}{% if selected_channel %}&channel={{ selected_channel }}{% endif %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}">XMLTV</a>
+      <a href="/public/epg/export?view={{ view }}&period={{ period }}&date={{ selected_date.isoformat() }}{% if selected_channel %}&channel={{ selected_channel }}{% endif %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}">Standalone</a>
     </div>
   </nav>
 

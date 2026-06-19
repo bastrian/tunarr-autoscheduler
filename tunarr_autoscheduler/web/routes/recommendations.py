@@ -368,6 +368,8 @@ async def recommendation_playlist_create(request: Request) -> Response:
         tags = _auto_recommendation_tags(tags, form, selected_results, request)
     target_playlist_id = str(form_data.get("target_playlist_id", "")).strip()
     mode = str(form_data.get("playlist_mode", "create")).strip()
+    if mode == "append" and not target_playlist_id:
+        target_playlist_id = str(form.get("source_playlist_id", "")).strip()
     playlist_id = ""
     if mode in {"replace", "append"} and target_playlist_id:
         existing = await repo.get(target_playlist_id)
@@ -463,6 +465,10 @@ async def _render_recommendations(
     repo = _playlist_repo(request)
     profiles = await _all_profiles(request)
     context = _recommendation_context(request, form)
+    similarity = await _playlist_similarity_context(
+        request,
+        str(form.get("source_playlist_id", "")),
+    )
     template = request.app.state.templates.get_template("recommendations.html")
     return HTMLResponse(template.render(
         request=request,
@@ -470,6 +476,7 @@ async def _render_recommendations(
         profiles=list(profiles.values()),
         selected_profile=profiles.get(form["profile"]),
         context=context,
+        similarity=similarity,
         language_rules=LANGUAGE_RULES,
         results=[_result_view(result) for result in results],
         playlist_options=await repo.list_all(),
@@ -497,6 +504,12 @@ async def _run_recommendations(
         include_excluded=form["include_excluded"],
         language_rule=language_rule,
     )
+    similarity = await _playlist_similarity_context(
+        request,
+        str(form.get("source_playlist_id", "")),
+    )
+    if similarity:
+        results = _apply_playlist_similarity(results, similarity)
     filtered = _filter_results(results, form)
     return filtered[:playlist_limit] if playlist_limit is not None else filtered[:form["limit"]]
 
@@ -652,6 +665,7 @@ def _query_form(request: Request) -> dict[str, Any]:
     channel_id = request.query_params.get("channel_id", "").strip()
     daypart_name = request.query_params.get("daypart", "").strip()
     playlist_id = request.query_params.get("playlist_id", "").strip()
+    source_playlist_id = request.query_params.get("source_playlist_id", "").strip()
     playlist_mode = request.query_params.get("playlist_mode", "").strip()
     inferred = _infer_context_defaults(request, channel_id, daypart_name)
     has_profile = "profile" in request.query_params
@@ -670,6 +684,7 @@ def _query_form(request: Request) -> dict[str, Any]:
         "channel_id": channel_id,
         "daypart": daypart_name,
         "playlist_id": playlist_id,
+        "source_playlist_id": source_playlist_id,
         "playlist_mode": playlist_mode if playlist_mode in {"replace", "append"} else "",
         "assign_to_daypart": (
             request.query_params.get("assign_to_daypart") in {"1", "true", "on"}
@@ -691,6 +706,7 @@ def _posted_form(form_data: Any) -> dict[str, Any]:
         "channel_id": str(form_data.get("channel_id", "")).strip(),
         "daypart": str(form_data.get("daypart", "")).strip(),
         "playlist_id": str(form_data.get("playlist_id", "")).strip(),
+        "source_playlist_id": str(form_data.get("source_playlist_id", "")).strip(),
         "playlist_mode": str(form_data.get("playlist_mode", "")).strip(),
         "assign_to_daypart": (
             str(form_data.get("assign_to_daypart", "")) in {"1", "true", "on"}
@@ -705,6 +721,143 @@ def _result_view(result: RecommendationResult) -> dict[str, Any]:
     data["warning_text"] = "; ".join(result.warnings)
     data["exclusion_text"] = "; ".join(result.exclusions)
     return data
+
+
+async def _playlist_similarity_context(
+    request: Request,
+    playlist_id: str,
+) -> dict[str, Any]:
+    if not playlist_id:
+        return {}
+    repo = _playlist_repo(request)
+    playlist = await repo.get(playlist_id)
+    if playlist is None:
+        return {}
+    source_keys = {
+        (item.media_type, item.media_id)
+        for item in playlist.items
+    }
+    terms = _similarity_terms([
+        playlist.name,
+        playlist.description,
+        playlist.category_name,
+        *playlist.tags,
+        *(item.title for item in playlist.items),
+    ])
+    media_types = Counter(item.media_type for item in playlist.items)
+    runtimes: list[int] = []
+    media_repo = getattr(request.app.state.core, "media_repo", None)
+    if media_repo is not None:
+        for entry in await media_repo.get_all_available():
+            metadata = entry.metadata or {}
+            series_id = str(metadata.get("series_id", ""))
+            entry_key = (
+                "movie" if entry.item_type == "movie" else "series",
+                entry.id if entry.item_type == "movie" else series_id,
+            )
+            if entry_key not in source_keys:
+                continue
+            terms.update(_similarity_terms([
+                entry.title,
+                *[str(item) for item in metadata.get("genres", []) if item],
+                *[str(item) for item in metadata.get("tags", []) if item],
+            ]))
+            if entry.duration_seconds:
+                runtimes.append(entry.duration_seconds)
+    avg_runtime = int(sum(runtimes) / len(runtimes)) if runtimes else None
+    return {
+        "playlist": playlist,
+        "playlist_id": playlist.id,
+        "name": playlist.name,
+        "terms": sorted(terms),
+        "source_keys": source_keys,
+        "media_types": media_types,
+        "average_runtime_seconds": avg_runtime,
+        "channel_scope": playlist.channel_scope,
+    }
+
+
+def _apply_playlist_similarity(
+    results: list[RecommendationResult],
+    similarity: dict[str, Any],
+) -> list[RecommendationResult]:
+    source_keys = {
+        (str(media_type), str(media_id))
+        for media_type, media_id in similarity.get("source_keys", set())
+    }
+    source_terms = {
+        term for term in similarity.get("terms", [])
+        if len(str(term)) >= 3
+    }
+    media_types = similarity.get("media_types", Counter())
+    if not isinstance(media_types, Counter):
+        media_types = Counter()
+    source_runtime = similarity.get("average_runtime_seconds")
+    updated: list[RecommendationResult] = []
+    for result in results:
+        candidate = result.candidate
+        reasons = list(result.reasons)
+        warnings = list(result.warnings)
+        exclusions = list(result.exclusions)
+        key = (candidate.media_type, candidate.id)
+        if key in source_keys:
+            exclusions.append("already in source playlist")
+        candidate_terms = _candidate_similarity_terms(result)
+        shared = sorted(candidate_terms & source_terms)
+        score = result.score
+        if shared:
+            points = min(30, 8 + len(shared) * 4)
+            score += points
+            reasons.append(
+                "similar to source playlist terms: "
+                f"{', '.join(shared[:6])} (+{points})",
+            )
+        if media_types and media_types.get(candidate.media_type):
+            score += 5
+            reasons.append(f"matches source playlist media type: {candidate.media_type} (+5)")
+        if (
+            isinstance(source_runtime, int)
+            and source_runtime > 0
+            and candidate.average_runtime_seconds
+        ):
+            difference = abs(candidate.average_runtime_seconds - source_runtime) / source_runtime
+            if difference <= 0.35:
+                score += 5
+                reasons.append("runtime resembles source playlist average (+5)")
+        updated.append(RecommendationResult(
+            candidate=candidate,
+            score=min(score, 100),
+            reasons=reasons,
+            warnings=warnings,
+            exclusions=exclusions,
+        ))
+    updated.sort(key=lambda item: (-item.score, item.candidate.title.lower()))
+    return updated
+
+
+def _candidate_similarity_terms(result: RecommendationResult) -> set[str]:
+    data = result.as_dict()
+    return _similarity_terms([
+        result.candidate.title,
+        result.candidate.media_type,
+        *[str(item) for item in data.get("genres", [])],
+        *[str(item) for item in data.get("tags", [])],
+        *[str(item) for item in data.get("manual_terms", [])],
+    ])
+
+
+def _similarity_terms(values: list[str]) -> set[str]:
+    stop_words = {"and", "the", "with", "from", "playlist", "recommended"}
+    terms: set[str] = set()
+    for value in values:
+        normalized = " ".join(str(value).strip().lower().split())
+        if not normalized:
+            continue
+        terms.add(normalized)
+        for part in normalized.replace("-", " ").replace("/", " ").split(" "):
+            if len(part) >= 3 and part not in stop_words:
+                terms.add(part)
+    return terms
 
 
 def _candidate_key(result: RecommendationResult) -> str:
@@ -1837,6 +1990,8 @@ def _query_string(form: dict[str, Any], *, error: str = "") -> str:
         query["daypart"] = str(form["daypart"])
     if form.get("playlist_id"):
         query["playlist_id"] = str(form["playlist_id"])
+    if form.get("source_playlist_id"):
+        query["source_playlist_id"] = str(form["source_playlist_id"])
     if form.get("playlist_mode"):
         query["playlist_mode"] = str(form["playlist_mode"])
     if form.get("assign_to_daypart"):

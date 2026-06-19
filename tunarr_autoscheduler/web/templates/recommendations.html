@@ -82,6 +82,16 @@
         <input class="form-control" id="q" name="q" value="{{ form.q }}" placeholder="Title, genre, tag, reason">
         <div class="form-text">Use -term or not:term for quick excludes.</div>
       </div>
+      <div class="col-lg-3 col-md-6">
+        <label class="form-label" for="source_playlist_id">Similar to Playlist</label>
+        <select class="form-select" id="source_playlist_id" name="source_playlist_id">
+          <option value="">No source playlist</option>
+          {% for playlist in playlist_options %}
+          <option value="{{ playlist.id }}" {% if form.source_playlist_id == playlist.id %}selected{% endif %}>{{ playlist.name }}</option>
+          {% endfor %}
+        </select>
+        <div class="form-text">Uses playlist tags, category, contents, media types, and runtime as recommendation signals.</div>
+      </div>
       <div class="col-lg-3 col-md-8">
         <label class="form-label" for="exclude_q">Exclude terms</label>
         <input class="form-control" id="exclude_q" name="exclude_q" value="{{ form.exclude_q }}" placeholder="Animation, Kids, Reality">
@@ -99,6 +109,12 @@
     {% if selected_profile %}
     <div class="small text-secondary mt-3">{{ selected_profile.description }}</div>
     {% endif %}
+    {% if similarity %}
+    <div class="alert alert-info mt-3 mb-0">
+      Similarity source: <strong>{{ similarity.name }}</strong>.
+      Existing source items are excluded from the suggestion list; append mode will add only new unique items.
+    </div>
+    {% endif %}
   </form>
 
   <form method="post" action="/recommendations/playlists">
@@ -112,6 +128,7 @@
     <input type="hidden" name="channel_id" value="{{ form.channel_id }}">
     <input type="hidden" name="daypart" value="{{ form.daypart }}">
     <input type="hidden" name="playlist_id" value="{{ form.playlist_id }}">
+    <input type="hidden" name="source_playlist_id" value="{{ form.source_playlist_id }}">
     <input type="hidden" name="playlist_mode" value="{{ form.playlist_mode }}">
     {% if form.include_excluded %}<input type="hidden" name="include_excluded" value="1">{% endif %}
 

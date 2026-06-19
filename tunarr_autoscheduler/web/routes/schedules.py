@@ -445,8 +445,9 @@ async def upload_schedule(request: Request, channel_id: str, version: int) -> HT
         request,
         channel,
         "success",
-        _upload_success_message(version, upload_result),
-        html_message=True,
+        "Uploaded schedule version.",
+        upload_result=upload_result,
+        upload_version=version,
     )
 
 
@@ -457,15 +458,9 @@ def _find_channel(core: Any, channel_id: str) -> Any:
     return None
 
 
-def _notice(
-    level: str,
-    message: str,
-    status_code: int = 200,
-    *,
-    html_message: bool = False,
-) -> HTMLResponse:
+def _notice(level: str, message: str, status_code: int = 200) -> HTMLResponse:
     safe_level = escape(level, quote=True)
-    safe_message = message if html_message else escape(message)
+    safe_message = escape(message)
     return HTMLResponse(
         f'<div class="alert alert-{safe_level} alert-dismissible fade show" role="alert">'
         f'{safe_message}'
@@ -483,20 +478,26 @@ def _public_upload_error(status_code: int) -> str:
     )
 
 
-def _upload_success_message(version: int, upload_result: dict[str, Any]) -> str:
+def _upload_success_notice(version: int, upload_result: dict[str, Any]) -> HTMLResponse:
     upload = upload_result.get("_upload", {})
+    safe_version = escape(str(version), quote=True)
     if not isinstance(upload, dict):
-        return (
+        return HTMLResponse(
+            '<div class="alert alert-success alert-dismissible fade show" role="alert">'
             '<div class="upload-result">'
-            f"<strong>Uploaded schedule version {version}.</strong>"
+            f"<strong>Uploaded schedule version {safe_version}.</strong>"
             '<span class="text-secondary">Tunarr accepted the schedule.</span>'
             "</div>"
+            '<button type="button" class="btn-close" data-bs-dismiss="alert" '
+            'aria-label="Close"></button>'
+            "</div>",
         )
     duration_minutes = int(float(upload.get("duration_ms", 0)) / 60000)
     fallback = "yes" if upload.get("fallback_used") else "no"
-    return (
+    return HTMLResponse(
+        '<div class="alert alert-success alert-dismissible fade show" role="alert">'
         '<div class="upload-result">'
-        f"<strong>Uploaded schedule version {version}.</strong>"
+        f"<strong>Uploaded schedule version {safe_version}.</strong>"
         '<div class="upload-result-grid">'
         f'{_upload_metric("Upload mode", upload.get("mode", "manual"))}'
         f'{_upload_metric("Persistent time", _persistent_time_label(upload))}'
@@ -508,14 +509,19 @@ def _upload_success_message(version: int, upload_result: dict[str, Any]) -> str:
         "</div>"
         '<span class="text-secondary">Schedule table refreshed.</span>'
         "</div>"
+        '<button type="button" class="btn-close" data-bs-dismiss="alert" '
+        'aria-label="Close"></button>'
+        "</div>",
     )
 
 
 def _upload_metric(label: str, value: object) -> str:
+    safe_label = escape(str(label), quote=True)
+    safe_value = escape(str(value), quote=True)
     return (
         '<span class="upload-result-metric">'
-        f"<small>{label}</small>"
-        f"<b>{value}</b>"
+        f"<small>{safe_label}</small>"
+        f"<b>{safe_value}</b>"
         "</span>"
     )
 
@@ -791,12 +797,16 @@ async def _action_result(
     message: str,
     status_code: int = 200,
     *,
-    html_message: bool = False,
+    upload_result: dict[str, Any] | None = None,
+    upload_version: int | None = None,
 ) -> HTMLResponse:
     core = request.app.state.core
     versions = await core.state.list_versions(channel.id)
     template = request.app.state.templates.get_template("schedule_table.html")
-    notice = bytes(_notice(level, message, html_message=html_message).body).decode()
+    if upload_result is not None and upload_version is not None:
+        notice = bytes(_upload_success_notice(upload_version, upload_result).body).decode()
+    else:
+        notice = bytes(_notice(level, message).body).decode()
     rows = template.render(
         request=request,
         channel=channel,
