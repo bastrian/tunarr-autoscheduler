@@ -8,7 +8,7 @@ Security fixes are provided for the current `main` branch and the latest publish
 
 Please do not open public issues for suspected vulnerabilities.
 
-Report security concerns through GitHub's private vulnerability reporting for this repository when available. If private reporting is unavailable, contact the maintainer directly and include:
+Report security concerns through GitHub's private vulnerability reporting for this repository and include:
 
 - A concise description of the issue
 - Affected version or commit
