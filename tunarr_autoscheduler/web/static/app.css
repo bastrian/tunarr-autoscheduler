@@ -648,6 +648,24 @@ textarea.form-control {
   color: var(--muted);
 }
 
+.settings-group-title {
+  margin: 0.4rem 0 0;
+  padding: 0.6rem 0 0.35rem;
+  border-top: 1px solid var(--border);
+  color: var(--accent);
+  font-size: 0.85rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.settings-subsection {
+  padding: 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: rgb(0 0 0 / 12%);
+}
+
 .settings-status-panel {
   margin-bottom: 1rem;
   padding: 0.9rem 1rem;
