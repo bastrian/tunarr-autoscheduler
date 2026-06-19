@@ -99,7 +99,7 @@ async def public_login(request: Request) -> Response:
     if not user_id:
         return _public_login_error(request, "Jellyfin login did not return a user", return_to)
     signer = request.app.state.session_signer
-    redirect = RedirectResponse(return_to, status_code=303)
+    redirect = RedirectResponse("/epg", status_code=303)
     redirect.set_cookie(
         "public_jellyfin_session",
         signer.sign(f"jellyfin:{user_id}").decode(),
