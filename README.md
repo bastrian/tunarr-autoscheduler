@@ -20,12 +20,16 @@ a normal Python application for development.
   variable movie blocks, continuity clips, and ad planning.
 - Schedule versioning with preview, approval, upload, diff, rollback,
   bulk-delete, cleanup, and upload history.
-- Public EPG with configurable access: disabled, Jellyfin login, or public.
+- Public EPG with configurable access: disabled, Jellyfin login, or public,
+  including day, evening, week, compact 7-day, JSON, XMLTV, and standalone
+  export views.
 - Recommendation tools that can build playlists, dayparts, or channel plans from
   Jellyfin metadata, optional external metadata, and optional Jellystat signals.
 - Notifications via Telegram, email, and webhook with event-specific routing.
 - Backups, diagnostic bundles, schedule health checks, and CLI commands for
   operational tasks.
+- Audit log for admin actions, uploads, schedule lifecycle changes, and
+  settings updates with sensitive values redacted.
 
 ## Requirements
 
@@ -181,6 +185,20 @@ The public EPG can be configured in Settings:
 - `public`: public EPG routes are openly readable.
 
 The public EPG is read-only and intentionally separated from the admin UI.
+
+Use `compact=1` with the week view for a condensed next-7-days guide:
+
+```text
+/epg?view=week&compact=1
+/public/epg.json?view=week&compact=1
+```
+
+## Audit Log
+
+The authenticated admin UI includes `/audit` for operational traceability.
+It records schedule generation, approval, upload, rollback, cleanup, deletion,
+channel changes, and settings updates. Secrets and API tokens are redacted
+before details are persisted.
 
 ## Security Notes
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from tunarr_autoscheduler.db.database import Database
 
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 
 CREATE_TABLES = [
     """
@@ -207,6 +207,22 @@ CREATE_TABLES = [
         applied_at TEXT
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS audit_log (
+        id TEXT PRIMARY KEY,
+        action TEXT NOT NULL,
+        actor TEXT NOT NULL,
+        source TEXT NOT NULL,
+        status TEXT NOT NULL,
+        channel_id TEXT NOT NULL DEFAULT '',
+        schedule_version INTEGER,
+        target_type TEXT NOT NULL DEFAULT '',
+        target_id TEXT NOT NULL DEFAULT '',
+        message TEXT NOT NULL DEFAULT '',
+        details_json TEXT NOT NULL DEFAULT '{}',
+        created_at TEXT NOT NULL
+    )
+    """,
 ]
 
 
@@ -343,6 +359,24 @@ def _get_migration(version: int) -> list[str] | None:
                 result_json TEXT NOT NULL DEFAULT '{}',
                 created_at TEXT NOT NULL,
                 applied_at TEXT
+            )
+            """,
+        ],
+        10: [
+            """
+            CREATE TABLE IF NOT EXISTS audit_log (
+                id TEXT PRIMARY KEY,
+                action TEXT NOT NULL,
+                actor TEXT NOT NULL,
+                source TEXT NOT NULL,
+                status TEXT NOT NULL,
+                channel_id TEXT NOT NULL DEFAULT '',
+                schedule_version INTEGER,
+                target_type TEXT NOT NULL DEFAULT '',
+                target_id TEXT NOT NULL DEFAULT '',
+                message TEXT NOT NULL DEFAULT '',
+                details_json TEXT NOT NULL DEFAULT '{}',
+                created_at TEXT NOT NULL
             )
             """,
         ],

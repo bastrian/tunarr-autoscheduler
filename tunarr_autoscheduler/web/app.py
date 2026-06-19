@@ -16,6 +16,7 @@ from tunarr_autoscheduler.core.timezones import format_datetime
 from tunarr_autoscheduler.integrations.jellyfin.client import JellyfinClient
 from tunarr_autoscheduler.integrations.tunarr.client import TunarrClient
 from tunarr_autoscheduler.web.routes.auth import router as auth_router
+from tunarr_autoscheduler.web.routes.audit import router as audit_router
 from tunarr_autoscheduler.web.routes.channels import router as channels_router
 from tunarr_autoscheduler.web.routes.jobs import router as jobs_router
 from tunarr_autoscheduler.web.routes.playlists import router as playlists_router
@@ -56,6 +57,7 @@ def create_app(core: Core) -> FastAPI:
     app.middleware("http")(_auth_middleware)
     app.include_router(setup_router, prefix="")
     app.include_router(auth_router, prefix="")
+    app.include_router(audit_router, prefix="")
     app.include_router(channels_router, prefix="")
     app.include_router(schedules_router, prefix="")
     app.include_router(jobs_router, prefix="")

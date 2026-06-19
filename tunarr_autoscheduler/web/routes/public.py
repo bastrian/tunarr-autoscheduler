@@ -48,6 +48,7 @@ async def public_epg(request: Request) -> HTMLResponse:
         window_start=payload["window_start"],
         window_end=payload["window_end"],
         view=payload["view"],
+        compact=payload["compact"],
         selected_date=payload["selected_date"],
         previous_date=payload["previous_date"],
         next_date=payload["next_date"],
@@ -109,6 +110,7 @@ async def _public_epg_payload(
     channels_by_id = {channel.id: channel for channel in config.channels}
     now = datetime.now(tz=timezone)
     view = _view_mode(request.query_params.get("view"))
+    compact = _compact_mode(request.query_params.get("compact"))
     period = _period_mode(request.query_params.get("period"))
     if view == "week":
         period = "day"
@@ -180,6 +182,7 @@ async def _public_epg_payload(
             "current": next((item for item in blocks if item["is_current"]), None),
             "next": next((item for item in blocks if item["starts_after_now"]), None),
             "upcoming": [item for item in blocks if item["starts_after_now"]][:5],
+            "days": _compact_days(blocks, window_start, window_end) if compact else [],
         })
 
     channel_options = [
@@ -200,6 +203,7 @@ async def _public_epg_payload(
         "search_query": search_query,
         "period": period,
         "view": view,
+        "compact": compact,
         "selected_date": selected_date,
         "previous_date": previous_date,
         "next_date": next_date,
@@ -215,6 +219,10 @@ async def _public_epg_payload(
 
 def _view_mode(raw: str | None) -> str:
     return raw if raw in {"day", "week"} else "day"
+
+
+def _compact_mode(raw: str | None) -> bool:
+    return str(raw or "").lower() in {"1", "true", "yes", "on"}
 
 
 def _period_mode(raw: str | None) -> str:
@@ -397,6 +405,44 @@ def _merge_consecutive_epg_items(
             continue
         merged.append(dict(item))
     return merged
+
+
+def _compact_days(
+    items: list[dict[str, Any]],
+    window_start: datetime,
+    window_end: datetime,
+) -> list[dict[str, Any]]:
+    days: list[dict[str, Any]] = []
+    cursor = window_start
+    while cursor < window_end:
+        day_end = min(cursor + timedelta(days=1), window_end)
+        day_items = [
+            item for item in items
+            if item["end"] > cursor and item["start"] < day_end
+        ]
+        days.append({
+            "date": cursor.date(),
+            "label": cursor.strftime("%a %d.%m."),
+            "items": day_items[:8],
+            "count": len(day_items),
+            "current": next((item for item in day_items if item["is_current"]), None),
+            "prime": _prime_item(day_items),
+        })
+        cursor = day_end
+    return days
+
+
+def _prime_item(items: list[dict[str, Any]]) -> dict[str, Any] | None:
+    if not items:
+        return None
+    preferred = [
+        item for item in items
+        if item["type"] != "offline" and item["start"].hour >= 18
+    ]
+    if preferred:
+        return preferred[0]
+    non_offline = [item for item in items if item["type"] != "offline"]
+    return non_offline[0] if non_offline else items[0]
 
 
 def _can_merge_epg_items(previous: dict[str, Any], current: dict[str, Any]) -> bool:
@@ -697,6 +743,17 @@ def _json_public_payload(payload: dict[str, Any]) -> dict[str, Any]:
             "current": _json_program(channel["current"]) if channel["current"] else None,
             "next": _json_program(channel["next"]) if channel["next"] else None,
             "upcoming": [_json_program(program) for program in channel["upcoming"]],
+            "days": [
+                {
+                    "date": day["date"].isoformat(),
+                    "label": day["label"],
+                    "count": day["count"],
+                    "current": _json_program(day["current"]) if day["current"] else None,
+                    "prime": _json_program(day["prime"]) if day["prime"] else None,
+                    "items": [_json_program(program) for program in day["items"]],
+                }
+                for day in channel.get("days", [])
+            ],
             "programs": programs,
         })
     return {
@@ -704,6 +761,7 @@ def _json_public_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "generated_at": payload["generated_at"].isoformat(),
         "timezone": payload["timezone"],
         "view": payload["view"],
+        "compact": payload["compact"],
         "period": payload["period"],
         "selected_channel": payload["selected_channel"],
         "selected_date": payload["selected_date"].isoformat(),

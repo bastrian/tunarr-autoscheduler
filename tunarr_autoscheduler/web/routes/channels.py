@@ -185,6 +185,14 @@ async def channel_config_import(request: Request, channel_id: str) -> Response:
             channels[index] = updated
             break
     core.config_manager.save()
+    await _audit(
+        core,
+        "channel.config_import",
+        channel_id=channel_id,
+        target_type="channel",
+        target_id=channel_id,
+        message=f"Imported config for {updated.name or channel_id}",
+    )
     return RedirectResponse("/?imported=1", status_code=303)
 
 
@@ -357,6 +365,20 @@ async def channel_config_save(request: Request, channel_id: str) -> Response:
             channels[index] = updated
             break
     core.config_manager.save()
+    await _audit(
+        core,
+        "channel.config_update",
+        channel_id=channel_id,
+        target_type="channel",
+        target_id=channel_id,
+        message=f"Updated config for {updated.name or channel_id}",
+        details={
+            "channel_profile": str(updated.channel_profile),
+            "dayparts": len(updated.dayparts),
+            "rotations": len(updated.rotations),
+            "public_epg_enabled": updated.public_epg_enabled,
+        },
+    )
     return RedirectResponse("/?saved=1", status_code=303)
 
 
@@ -369,6 +391,15 @@ async def toggle_channel(request: Request, channel_id: str) -> HTMLResponse:
 
     channel.scheduling_enabled = not channel.scheduling_enabled
     core.config_manager.save()
+    await _audit(
+        core,
+        "channel.toggle",
+        channel_id=channel_id,
+        target_type="channel",
+        target_id=channel_id,
+        message="Enabled channel" if channel.scheduling_enabled else "Disabled channel",
+        details={"scheduling_enabled": channel.scheduling_enabled},
+    )
     label = "Enabled" if channel.scheduling_enabled else "Disabled"
     badge_class = "badge-enabled" if channel.scheduling_enabled else "badge-disabled"
     button_label = "Disable" if channel.scheduling_enabled else "Enable"
@@ -426,6 +457,15 @@ async def generate_schedule(request: Request, channel_id: str) -> HTMLResponse:
             "Generation could not be started with the selected options.",
             status_code=409,
         )
+    await _audit(
+        core,
+        "schedule.generate",
+        channel_id=channel_id,
+        target_type="generation_job",
+        target_id=job.id,
+        message=f"Started {generation_mode} generation",
+        details={"mode": generation_mode, "parent_version": parent_version},
+    )
     mode_label = "Follow-up" if generation_mode == "follow_up" else "New"
     parent_label = f" after version {parent_version}" if parent_version else ""
     return HTMLResponse(
@@ -447,6 +487,12 @@ async def cancel_generation(request: Request, channel_id: str) -> HTMLResponse:
     cancelled = await core.job_manager.cancel_generation(channel_id)
     if not cancelled:
         return _notice("warning", "No generation in progress.", status_code=404)
+    await _audit(
+        core,
+        "schedule.cancel_generation",
+        channel_id=channel_id,
+        message="Generation cancellation requested",
+    )
     return _notice("info", "Generation cancellation requested.")
 
 
@@ -1457,3 +1503,31 @@ def _safe_return_to(value: str | None) -> str:
 def _safe_filename(value: str) -> str:
     filename = re.sub(r"[^A-Za-z0-9._-]+", "-", value.strip()).strip("-")
     return filename or "channel"
+
+
+async def _audit(
+    core: Any,
+    action: str,
+    *,
+    status: str = "success",
+    channel_id: str = "",
+    target_type: str = "",
+    target_id: str = "",
+    message: str = "",
+    details: dict[str, Any] | None = None,
+) -> None:
+    repo = getattr(core, "audit_repo", None)
+    if repo is None:
+        return
+    try:
+        await repo.record(
+            action,
+            status=status,
+            channel_id=channel_id,
+            target_type=target_type,
+            target_id=target_id,
+            message=message,
+            details=details,
+        )
+    except Exception:
+        return

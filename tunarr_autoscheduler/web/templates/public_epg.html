@@ -30,8 +30,10 @@
 
   <nav class="epg-control-panel" aria-label="EPG navigation">
     <div class="epg-view-toggle">
-      <a class="{% if view == 'day' %}active{% endif %}" href="{{ epg_path }}?view=day&period={{ period }}&date={{ selected_date.isoformat() }}{% if selected_channel %}&channel={{ selected_channel }}{% endif %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}">Day</a>
-      <a class="{% if view == 'week' %}active{% endif %}" href="{{ epg_path }}?view=week&period=day&date={{ selected_date.isoformat() }}{% if selected_channel %}&channel={{ selected_channel }}{% endif %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}">Week</a>
+      <a class="{% if view == 'day' and period != 'evening' %}active{% endif %}" href="{{ epg_path }}?view=day&period=day&date={{ selected_date.isoformat() }}{% if selected_channel %}&channel={{ selected_channel }}{% endif %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}">Day</a>
+      <a class="{% if view == 'day' and period == 'evening' %}active{% endif %}" href="{{ epg_path }}?view=day&period=evening&date={{ selected_date.isoformat() }}{% if selected_channel %}&channel={{ selected_channel }}{% endif %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}">Tonight</a>
+      <a class="{% if view == 'week' and not compact %}active{% endif %}" href="{{ epg_path }}?view=week&period=day&date={{ selected_date.isoformat() }}{% if selected_channel %}&channel={{ selected_channel }}{% endif %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}">Week</a>
+      <a class="{% if view == 'week' and compact %}active{% endif %}" href="{{ epg_path }}?view=week&period=day&compact=1&date={{ selected_date.isoformat() }}{% if selected_channel %}&channel={{ selected_channel }}{% endif %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}">Next 7 Days</a>
     </div>
 
     <div class="epg-period-strip" aria-label="Time window">
@@ -47,6 +49,7 @@
       <input type="hidden" name="period" value="{{ period }}">
       <input type="hidden" name="date" value="{{ selected_date.isoformat() }}">
       <input type="hidden" name="q" value="{{ search_query }}">
+      {% if compact %}<input type="hidden" name="compact" value="1">{% endif %}
       <label for="epg-channel">Channel</label>
       <select id="epg-channel" name="channel" onchange="this.form.submit()">
         <option value="">All channels</option>
@@ -60,21 +63,22 @@
       <input type="hidden" name="view" value="{{ view }}">
       <input type="hidden" name="period" value="{{ period }}">
       <input type="hidden" name="date" value="{{ selected_date.isoformat() }}">
+      {% if compact %}<input type="hidden" name="compact" value="1">{% endif %}
       {% if selected_channel %}<input type="hidden" name="channel" value="{{ selected_channel }}">{% endif %}
       <label for="epg-search">Search</label>
       <input id="epg-search" name="q" value="{{ search_query }}" placeholder="Title, series, movie, channel">
     </form>
 
     <div class="epg-pager">
-      <a href="{{ epg_path }}?view={{ view }}&period={{ period }}&date={{ previous_date.isoformat() }}{% if selected_channel %}&channel={{ selected_channel }}{% endif %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}" aria-label="Previous {{ view }}">&lsaquo;</a>
-      <a href="{{ epg_path }}?view={{ view }}&period={{ period }}{% if selected_channel %}&channel={{ selected_channel }}{% endif %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}" aria-label="Today">Today</a>
-      <a href="{{ epg_path }}?view={{ view }}&period={{ period }}&date={{ next_date.isoformat() }}{% if selected_channel %}&channel={{ selected_channel }}{% endif %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}" aria-label="Next {{ view }}">&rsaquo;</a>
+      <a href="{{ epg_path }}?view={{ view }}&period={{ period }}{% if compact %}&compact=1{% endif %}&date={{ previous_date.isoformat() }}{% if selected_channel %}&channel={{ selected_channel }}{% endif %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}" aria-label="Previous {{ view }}">&lsaquo;</a>
+      <a href="{{ epg_path }}?view={{ view }}&period={{ period }}{% if compact %}&compact=1{% endif %}{% if selected_channel %}&channel={{ selected_channel }}{% endif %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}" aria-label="Today">Today</a>
+      <a href="{{ epg_path }}?view={{ view }}&period={{ period }}{% if compact %}&compact=1{% endif %}&date={{ next_date.isoformat() }}{% if selected_channel %}&channel={{ selected_channel }}{% endif %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}" aria-label="Next {{ view }}">&rsaquo;</a>
     </div>
 
     <div class="epg-export-links" aria-label="Public exports">
-      <a href="/public/epg.json?view={{ view }}&period={{ period }}&date={{ selected_date.isoformat() }}{% if selected_channel %}&channel={{ selected_channel }}{% endif %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}">JSON</a>
-      <a href="/public/epg.xml?view={{ view }}&period={{ period }}&date={{ selected_date.isoformat() }}{% if selected_channel %}&channel={{ selected_channel }}{% endif %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}">XMLTV</a>
-      <a href="/public/epg/export?view={{ view }}&period={{ period }}&date={{ selected_date.isoformat() }}{% if selected_channel %}&channel={{ selected_channel }}{% endif %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}">Standalone</a>
+      <a href="/public/epg.json?view={{ view }}&period={{ period }}{% if compact %}&compact=1{% endif %}&date={{ selected_date.isoformat() }}{% if selected_channel %}&channel={{ selected_channel }}{% endif %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}">JSON</a>
+      <a href="/public/epg.xml?view={{ view }}&period={{ period }}{% if compact %}&compact=1{% endif %}&date={{ selected_date.isoformat() }}{% if selected_channel %}&channel={{ selected_channel }}{% endif %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}">XMLTV</a>
+      <a href="/public/epg/export?view={{ view }}&period={{ period }}{% if compact %}&compact=1{% endif %}&date={{ selected_date.isoformat() }}{% if selected_channel %}&channel={{ selected_channel }}{% endif %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}">Standalone</a>
     </div>
   </nav>
 
@@ -137,6 +141,65 @@
     {% endfor %}
   </section>
 
+  {% if compact %}
+  <section class="epg-section epg-compact-week" aria-label="Next seven days">
+    <div class="epg-section-head">
+      <div>
+        <span class="epg-kicker">Next 7 days</span>
+        <h2>Compact guide by channel</h2>
+      </div>
+    </div>
+    <div class="epg-compact-grid">
+      {% for channel in channels %}
+      <article class="epg-compact-channel">
+        <header>
+          <h3>
+            {% if channel.logo_url %}<img src="{{ channel.logo_url }}" alt="" loading="lazy">{% endif %}
+            <span>{{ channel.name }}</span>
+          </h3>
+        </header>
+        <div class="epg-compact-days">
+          {% for day in channel.days %}
+          {% set prime = day.prime %}
+          <section class="epg-compact-day {% if day.current %}is-live{% endif %}">
+            <div class="epg-compact-date">
+              <strong>{{ day.label }}</strong>
+              <span>{{ day.count }} entries</span>
+            </div>
+            {% if prime %}
+            <div class="epg-compact-prime">
+              {% if prime.image_url %}
+              <div class="epg-compact-art" style="background-image: url('{{ prime.image_url }}')"></div>
+              {% else %}
+              <div class="epg-compact-art epg-art-empty">{{ prime.kind[:1] }}</div>
+              {% endif %}
+              <div>
+                <span class="epg-time">{{ prime.time }}</span>
+                <h4>{{ prime.title }}</h4>
+                {% if prime.subtitle %}<p>{{ prime.subtitle }}</p>{% endif %}
+              </div>
+            </div>
+            {% else %}
+            <p class="text-secondary">No entries.</p>
+            {% endif %}
+            {% if day.items %}
+            <ol class="epg-compact-list">
+              {% for item in day.items[:4] %}
+              <li>
+                <span>{{ item.time }}</span>
+                <strong>{{ item.title }}</strong>
+              </li>
+              {% endfor %}
+            </ol>
+            {% endif %}
+          </section>
+          {% endfor %}
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+  </section>
+  {% else %}
   <section class="epg-section epg-timeline" data-view="{{ view }}">
     <div class="epg-section-head">
       <div>
@@ -217,6 +280,7 @@
       {% endfor %}
     </div>
   </section>
+  {% endif %}
   {% endif %}
 </main>
 <script>
